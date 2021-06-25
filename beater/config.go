@@ -1,6 +1,6 @@
 package beater
 
-type CloudTrailConfig struct {
+type VpcFlowLogConfig struct {
 	SQSUrl                *string `config:"sqs_url"`
 	AWSCredentialProvider *string `config:"aws_credential_provider"`
 	AWSRegion             *string `config:"aws_region"`
@@ -10,5 +10,5 @@ type CloudTrailConfig struct {
 }
 
 type ConfigSettings struct {
-	Input CloudTrailConfig
+	Input VpcFlowLogConfig
 }

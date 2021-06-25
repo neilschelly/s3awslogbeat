@@ -43,94 +43,176 @@ env:
       description: >
         Contains user configurable fields.
 
-cloudtrail:
+vpcflowlog:
   type: group
   description: >
-    Contains information about a CloudTrail event
+    Contains information about a VPC Flow Log entry
   fields:
-    - name: cloudtrail
+    - name: vpcflowlog
       type: group
       description: >
-          Contains CloudTrail access logs.
+          Contains VPC Flow Logs.
 
       fields:
-        - name: eventTime
+        - name: version
           type: string
           description: >
-            The date and time the request was made, in coordinated universal time (UTC).
+            The VPC Flow Logs version. If you use the default format, the version is 2. If you use a custom format, the version is the highest version among the specified fields. For example, if you specify only fields from version 2, the version is 2. If you specify a mixture of fields from versions 2, 3, and 4, the version is 4.
 
-        - name: eventVersion
+        - name: account-id
           type: string
           description: >
-            The version of the log event format. The current version is 1.02.
-    
-        - name: userIdentity
+            The AWS account ID of the owner of the source network interface for which traffic is recorded. If the network interface is created by an AWS service, for example when creating a VPC endpoint or Network Load Balancer, the record may display unknown for this field.
+
+        - name: interface-id
           type: string
           description: >
-            Information about the user that made a request. For more information, see CloudTrail userIdentity Element 
-    
-        - name: eventSource
+            The ID of the network interfaces for which the traffic is recorded.
+
+        - name: srcaddr
           type: string
           description: >
-            The service that the request was made to. This name is normally a short form of the service name without spaces plus .amazonaws.com. For example, the eventSource field lists a call to AWS CloudFormation as cloudformation.amazonaws.com, a call to Amazon EC2 as ec2.amazonaws.com, and a call to Amazon Simple Workflow Service as swf.amazonaws.com. One exception to this convention is CloudWatch, for which the event source is monitoring.amazonaws.com.
-    
-        - name: eventName
+            The source address for incoming traffic, or the IPv4 or IPv6 address of the network interface for outgoing traffic on the network interface. The IPv4 address of the network interface is always its private IPv4 address. See also pkt-srcaddr.
+
+        - name: dstaddr
           type: string
           description: >
-            The requested action, which is one of the actions listed in the API Reference for the service.
-    
-        - name: awsRegion
+            The destination address for outgoing traffic, or the IPv4 or IPv6 address of the network interface for incoming traffic on the network interface. The IPv4 address of the network interface is always its private IPv4 address. See also pkt-dstaddr.
+
+        - name: srcport
           type: string
           description: >
-            The AWS region that the request was made to; for example, us-east-1.
-    
-        - name: sourceIPAddress
+            The source port of the traffic.
+
+        - name: dstport
           type: string
           description: >
-            The apparent IP address that the request was made from. For actions that originate from the service console, the address reported is for the underlying customer resource, not the console web server. For services in AWS, only the DNS name is displayed.
-    
-        - name: errorCode
+            The destination port of the traffic.
+
+        - name: protocol
           type: string
           description: >
-            The AWS service error if the request returns an error.
-    
-        - name: errorMessage
+            The IANA protocol number of the traffic. For more information, see http://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml.
+
+        - name: packets
           type: string
           description: >
-            If the request returns an error, the description of the error. This message includes messages for authorization failures.
-    
-        - name: requestParameters
+            The number of packets transferred during the flow.
+
+        - name: bytes
           type: string
           description: >
-            The parameters, if any, that were sent with the request.
-    
-        - name: responseElements
+            The number of bytes transferred during the flow.
+
+        - name: start
           type: string
           description: >
-            The response element for actions that make changes (create, update, or delete actions). If an action does not change state (for example, a request to get or list objects), this element is omitted.
-    
-        - name: requestID
+            The time, in Unix seconds, when the first packet of the flow was received within the aggregation interval. This might be up to 60 seconds after the packet was transmitted or received on the network interface.
+
+        - name: end
           type: string
           description: >
-            Value generated by the service being called that identifies the request.
-    
-        - name: eventID
+            The time, in Unix seconds, when the last packet of the flow was received within the aggregation interval. This might be up to 60 seconds after the packet was transmitted or received on the network interface.
+
+        - name: action
           type: string
           description: >
-            GUID generated by CloudTrail to uniquely identify each event. You can use this value to identify a single event. For example, you can use the ID as a primary key to retrieve log data from a searchable database.
-    
-        - name: eventType
+            The action that is associated with the traffic:
+              - ACCEPT — The recorded traffic was permitted by the security groups and network ACLs.
+              - REJECT — The recorded traffic was not permitted by the security groups or network ACLs.
+
+        - name: log-status
           type: string
           description: >
-            Identifies the type of event that generated the event record.
-    
-        - name: apiVersion
+            The logging status of the flow log:
+              - OK — Data is logging normally to the chosen destinations.
+              - NODATA — There was no network traffic to or from the network interface during the aggregation interval.
+              - SKIPDATA — Some flow log records were skipped during the aggregation interval. This may be because of an internal capacity constraint, or an internal error.
+        - name: vpc-id
           type: string
           description: >
-            Identifies the API version number associated with the AwsApiCall eventType value.
-    
-        - name: recipientAccountID
+            The ID of the VPC that contains the network interface for which the traffic is recorded.
+
+        - name: subnet-id
           type: string
           description: >
-            Represents the account ID that received this event.
-    
+            The ID of the subnet that contains the network interface for which the traffic is recorded.
+
+        - name: instance-id
+          type: string
+          description: >
+            The ID of the instance that's associated with network interface for which the traffic is recorded, if the instance is owned by you. Returns a '-' symbol for a requester-managed network interface; for example, the network interface for a NAT gateway.
+
+        - name: tcp-flags
+          type: string
+          description: >
+            The bitmask value for the following TCP flags:
+              - SYN — 2
+              - SYN-ACK — 18
+              - FIN — 1
+              - RST — 4
+            ACK is reported only when it's accompanied with SYN.
+            TCP flags can be OR-ed during the aggregation interval. For short connections, the flags might be set on the same line in the flow log record, for example, 19 for SYN-ACK and FIN, and 3 for SYN and FIN. For an example, see TCP flag sequence.
+
+        - name: type
+          type: string
+          description: >
+            The type of traffic. The possible values are: IPv4, IPv6, and EFA. For more information about the Elastic Fabric Adapter (EFA), see Elastic Fabric Adapter (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa.html).
+
+        - name: pkt-srcaddr
+          type: string
+          description: >
+            The packet-level (original) source IP address of the traffic. Use this field with the srcaddr field to distinguish between the IP address of an intermediate layer through which traffic flows, and the original source IP address of the traffic. For example, when traffic flows through a network interface for a NAT gateway, or where the IP address of a pod in Amazon EKS is different from the IP address of the network interface of the instance node on which the pod is running (for communication within a VPC).
+
+        - name: pkt-dstaddr
+          type: string
+          description: >
+            The packet-level (original) destination IP address for the traffic. Use this field with the dstaddr field to distinguish between the IP address of an intermediate layer through which traffic flows, and the final destination IP address of the traffic. For example, when traffic flows through a network interface for a NAT gateway, or where the IP address of a pod in Amazon EKS is different from the IP address of the network interface of the instance node on which the pod is running (for communication within a VPC).
+
+        - name: region
+          type: string
+          description: >
+            The Region that contains the network interface for which traffic is recorded.
+
+        - name: az-id
+          type: string
+          description: >
+            The ID of the Availability Zone that contains the network interface for which traffic is recorded. If the traffic is from a sublocation, the record displays a '-' symbol for this field.
+
+        - name: sublocation-type
+          type: string
+          description: >
+            The type of sublocation that's returned in the sublocation-id field. The possible values are: wavelength | outpost | localzone. If the traffic is not from a sublocation, the record displays a '-' symbol for this field. 
+
+        - name: sublocation-id
+          type: string
+          description: >
+            The ID of the sublocation that contains the network interface for which traffic is recorded. If the traffic is not from a sublocation, the record displays a '-' symbol for this field.
+
+        - name: pkt-src-aws-service
+          type: string
+          description: >
+            The name of the subset of IP address ranges for the pkt-srcaddr field, if the source IP address is for an AWS service. The possible values are: AMAZON | AMAZON_APPFLOW | AMAZON_CONNECT | API_GATEWAY | CHIME_MEETINGS | CHIME_VOICECONNECTOR | CLOUD9 | CLOUDFRONT | CODEBUILD | DYNAMODB | EC2 | EC2_INSTANCE_CONNECT | GLOBALACCELERATOR | KINESIS_VIDEO_STREAMS | ROUTE53 | ROUTE53_HEALTHCHECKS | S3 | WORKSPACES_GATEWAYS.
+
+        - name: pkt-dst-aws-service
+          type: string
+          description: >
+            The name of the subset of IP address ranges for the pkt-dstaddr field, if the destination IP address is for an AWS service. For a list of possible values, see the pkt-src-aws-service field.
+
+        - name: flow-direction
+          type: string
+          description: >
+            The direction of the flow with respect to the interface where traffic is captured. The possible values are: ingress | egress.
+
+        - name: traffic-path
+          type: string
+          description: >
+            The path that egress traffic takes to the destination. To determine whether the traffic is egress traffic, check the flow-direction field. The possible values are as follows. If none of the values apply, the field is set to -.
+              1 — Through another resource in the same VPC
+              2 — Through an internet gateway or a gateway VPC endpoint
+              3 — Through a virtual private gateway
+              4 — Through an intra-region VPC peering connection
+              5 — Through an inter-region VPC peering connection
+              6 — Through a local gateway
+              7 — Through a gateway VPC endpoint (Nitro-based instances only)
+              8 — Through an internet gateway (Nitro-based instances only)

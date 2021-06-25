@@ -1,8 +1,7 @@
 hash: 1ef9799c10583143248f2f2077ee739beefcfd5c9e5eb99f024196b4c800f316
 updated: 2016-05-24T11:07:59.689104092+10:00
 imports:
-- name: github.com/taxibeat/cloudtrailbeat
-  version: 452a0c492ef3690e20c27740b45f565860de9f37
+- name: github.com/neilschelly/vpcflowlogbeat
   subpackages:
   - beater
 - name: github.com/aws/aws-sdk-go

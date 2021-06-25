@@ -1,4 +1,4 @@
-package: github.com/taxibeat/cloudtrailbeat
+package: github.com/neilschelly/vpcflowlogbeat
 import:
 - package: github.com/aws/aws-sdk-go
   subpackages:

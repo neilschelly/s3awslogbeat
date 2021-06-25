@@ -1,8 +1,8 @@
-################### CloudTrailbeat Configuration Example #########################
+################### VPCFlowLogBeat Configuration Example #########################
  
 ##################################################################################
 input:
-    # Full URL of SQS which will be polled to identify new CloudTrail log events
+    # Full URL of SQS which will be polled to identify new VPC Flow log events
     # default: no default
     sqs_url: "https://sqs.us-east-1.amazonaws.com/xxxxxxxxxxxxxx/cloudtrail-events"
 
