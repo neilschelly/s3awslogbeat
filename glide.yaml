@@ -1,4 +1,4 @@
-package: github.com/taxibeat/cloudtrailbeat
+package: github.com/neilschelly/s3awslogbeat
 import:
 - package: github.com/aws/aws-sdk-go
   subpackages:
@@ -14,3 +14,7 @@ import:
   - libbeat/common
   - libbeat/logp
   - libbeat/publisher
+- package: github.com/prometheus/client_golang
+  version: v1.10.0
+  subpackages:
+  - prometheus

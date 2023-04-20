@@ -1,5 +1,5 @@
 BEATNAME=cloudtrailbeat
-BEAT_DIR=github.com/taxibeat/cloudtrailbeat
+BEAT_DIR=github.com/neilschelly/s3awslogbeat
 ES_BEATS=./vendor/github.com/elastic/beats
 GOPACKAGES=$(shell glide novendor)
 SYSTEM_TESTS=false

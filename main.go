@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"github.com/elastic/beats/libbeat/beat"
-	"github.com/taxibeat/cloudtrailbeat/beater"
+	"github.com/neilschelly/s3awslogbeat/beater"
 )
 
 var Version = "0.0.3"
