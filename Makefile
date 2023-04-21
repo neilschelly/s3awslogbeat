@@ -9,3 +9,8 @@ SYSTEM_TESTS=false
 GOX_OS=linux
 
 include $(ES_BEATS)/libbeat/scripts/Makefile
+
+# Specifying output command name
+.PHONY: build
+build: $(GOFILES)
+	go build -o $(BEATNAME)
