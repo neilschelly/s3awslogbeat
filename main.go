@@ -15,7 +15,7 @@ var Name = "cloudtrailbeat"
 
 func main() {
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":9400", nil)
+	go http.ListenAndServe(":9400", nil)
 
 	if err := beat.Run(Name, Version, beater.New()); err != nil {
 		os.Exit(1)
