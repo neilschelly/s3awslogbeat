@@ -18,3 +18,5 @@ import:
   version: v1.10.0
   subpackages:
   - prometheus
+  - prometheus/promauto
+  - prometheus/promhttp
