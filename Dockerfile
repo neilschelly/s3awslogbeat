@@ -4,7 +4,7 @@ RUN git clone https://github.com/neilschelly/s3awslogbeat.git /go/src
 
 WORKDIR /go/src/
 RUN git checkout origin/promexporter
-RUN go mod vendor && go build
+RUN go mod vendor && go build -o s3awslogbeat
 
 FROM debian:buster
 RUN apt-get update && apt-get install -y ca-certificates && apt-get clean
