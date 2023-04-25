@@ -1,3 +1,4 @@
 *.swp
 cloudtrailbeat
 testconfig.yml
+*~

@@ -52,7 +52,7 @@ output:
 
     # Optional index name. The default is "beatname" and generates
     # [beatname-]YYYY.MM.DD keys.
-    #index: "beatname"
+    index: "operations"
 
     # A template is used to set the mapping in Elasticsearch
     # By default template loading is disabled and no template is loaded.
