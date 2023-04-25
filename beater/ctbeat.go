@@ -113,9 +113,6 @@ func init() {
 		backfillBucket: flag.String("b", "", "Name of S3 bucket used for backfilling"),
 		backfillPrefix: flag.String("p", "", "Prefix to be used when listing objects from S3 bucket"),
 	}
-
-	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(":9400", nil)
 }
 
 func New() *CloudTrailbeat {
@@ -222,6 +219,9 @@ func (cb *CloudTrailbeat) Setup(b *beat.Beat) error {
 }
 
 func (cb *CloudTrailbeat) Run(b *beat.Beat) error {
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":9400", nil)
+
 	if cb.backfillBucket != "" {
 		logp.Info("Running in backfill mode")
 		if err := cb.runBackfill(); err != nil {
