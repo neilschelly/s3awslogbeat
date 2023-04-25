@@ -9,7 +9,7 @@ RUN go mod vendor && go build
 FROM debian:buster
 RUN apt-get update && apt-get install -y ca-certificates && apt-get clean
 WORKDIR /
-COPY --from=0 /app/s3awslogbeat /usr/local/bin/s3awslogbeat
+COPY --from=0 /go/src/s3awslogbeat /usr/local/bin/s3awslogbeat
 
 ENTRYPOINT ["/usr/local/bin/s3awslogbeat"]
 CMD ["--help"]

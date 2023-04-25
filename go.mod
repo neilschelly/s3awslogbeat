@@ -1,4 +1,4 @@
-module s3awslogbeat
+module main
 
 go 1.18
 
