@@ -46,6 +46,11 @@ type CloudTrailbeat struct {
 	CmdLineArgs		CmdLineArgs
 	events			publisher.Client
 	done			chan struct{}
+
+	filesProcessed			prometheus.Counter
+	filesProcessedErrors	prometheus.Counter
+	eventsProcessed			prometheus.Counter
+	eventsProcessedErrors	prometheus.Counter
 }
 
 // CmdLineArgs is used by the flag package to parse custom flags specific
@@ -108,6 +113,9 @@ func init() {
 		backfillBucket: flag.String("b", "", "Name of S3 bucket used for backfilling"),
 		backfillPrefix: flag.String("p", "", "Prefix to be used when listing objects from S3 bucket"),
 	}
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":9400", nil)
 }
 
 func New() *CloudTrailbeat {
@@ -139,9 +147,6 @@ func New() *CloudTrailbeat {
 			Help: "The total number of errors with publishing events",
 		}
 	)
-
-	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(":9400", nil)
 
 	return cb
 }
