@@ -364,10 +364,10 @@ func (cb *CloudTrailbeat) publishEvents(ct cloudtrailLog) error {
 		events = append(events, be)
 	}
 	if !cb.events.PublishEvents(events, publisher.Sync, publisher.Guaranteed) {
-		cb.eventsProcessedErrors.Inc(len(events))
+		cb.eventsProcessedErrors.Add(len(events))
 		return fmt.Errorf("Error publishing events")
 	}
-	cb.eventsProcessed.Inc(len(events))
+	cb.eventsProcessed.Add(len(events))
 
 	return nil
 }
