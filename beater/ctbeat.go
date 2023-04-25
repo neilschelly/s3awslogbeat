@@ -93,7 +93,7 @@ type cloudtrailEvent struct {
 	EventTime			string					`json:"eventTime"`
 	EventVersion		string					`json:"eventVersion"`
 	EventSource			string					`json:"eventSource"`
-	UserIdentity		map[string]interface{}}	`json:"userIdentity"`
+	UserIdentity		map[string]interface{}	`json:"userIdentity"`
 	EventName			string					`json:"eventName"`
 	AwsRegion			string					`json:"awsRegion"`
 	SourceIPAddress		string					`json:"sourceIPAddress"`
@@ -123,27 +123,23 @@ func New() *CloudTrailbeat {
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_files",
 			Help: "The total number of S3 files with events processed",
-		}
-	)
+		})
 	cb.filesProcessedErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_file_errors",
 			Help: "The total number of errors ingesting S3 files with events",
-		}
-	)
+		})
 
 	cb.eventsProcessed = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_events",
 			Help: "The total number of published events",
-		}
-	)
+		})
 	cb.eventsProcessedErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_events_errors",
 			Help: "The total number of errors with publishing events",
-		}
-	)
+		})
 
 	return cb
 }

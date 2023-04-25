@@ -1,10 +1,10 @@
-package main
+package s3awslogbeat
 
 import (
 	"os"
 
 	"github.com/elastic/beats/libbeat/beat"
-	"main/beater"
+	"s3awslogbeat/beater"
 )
 
 var Version = "0.1.0"

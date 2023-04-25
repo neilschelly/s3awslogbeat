@@ -1,4 +1,4 @@
-module github.com/neilschelly/s3awslogbeat/s3awslogbeat
+module s3awslogbeat
 
 go 1.18
 
