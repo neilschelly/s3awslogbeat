@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"strings"
 	"time"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const logTimeFormat = "2006-01-02T15:04:05Z"
@@ -31,49 +33,49 @@ const logTimeFormat = "2006-01-02T15:04:05Z"
 //  running instance as defined in cmd line arguments and the configuration
 //  file.
 type CloudTrailbeat struct {
-	sqsURL        string
-	awsConfig     *aws.Config
-	numQueueFetch int
-	sleepTime     time.Duration
-	noPurge       bool
+	sqsURL			string
+	awsConfig		*aws.Config
+	numQueueFetch	int
+	sleepTime		time.Duration
+	noPurge			bool
 
-	backfillBucket string
-	backfillPrefix string
+	backfillBucket	string
+	backfillPrefix	string
 
-	CTbConfig   ConfigSettings
-	CmdLineArgs CmdLineArgs
-	events      publisher.Client
-	done        chan struct{}
+	CTbConfig		ConfigSettings
+	CmdLineArgs		CmdLineArgs
+	events			publisher.Client
+	done			chan struct{}
 }
 
 // CmdLineArgs is used by the flag package to parse custom flags specific
 //  to CloudTrailbeat
 type CmdLineArgs struct {
-	backfillBucket *string
-	backfillPrefix *string
+	backfillBucket		*string
+	backfillPrefix		*string
 }
 
 var cmdLineArgs CmdLineArgs
 
 // SQS message extracted from raw sqs event Body
 type sqsMessage struct {
-	Type             string
-	MessageID        string
-	TopicArn         string
-	Message          string
-	Timestamp        string
-	SignatureVersion string
-	Signature        string
-	SigningCertURL   string
-	UnsubscribeURL   string
+	Type				string
+	MessageID			string
+	TopicArn			string
+	Message				string
+	Timestamp			string
+	SignatureVersion	string
+	Signature			string
+	SigningCertURL		string
+	UnsubscribeURL		string
 }
 
 // CloudTrail specific information extracted from sqsMessage and sqsMessage.Message
 type ctMessage struct {
-	S3Bucket      string   `json:"s3Bucket"`
-	S3ObjectKey   []string `json:"s3ObjectKey"`
-	MessageID     string   `json:",omitempty"`
-	ReceiptHandle string   `json:",omitempty"`
+	S3Bucket		string		`json:"s3Bucket"`
+	S3ObjectKey		[]string	`json:"s3ObjectKey"`
+	MessageID		string		`json:",omitempty"`
+	ReceiptHandle	string		`json:",omitempty"`
 }
 
 // data struct matching the defined fields of a CloudTrail Record as
@@ -83,23 +85,22 @@ type cloudtrailLog struct {
 	Records []cloudtrailEvent
 }
 type cloudtrailEvent struct {
-	EventTime          string                 `json:"eventTime"`
-	EventVersion       string                 `json:"eventVersion"`
-	EventSource        string                 `json:"eventSource"`
-	UserIdentity       map[string]interface{} `json:"userIdentity"`
-	EventName          string                 `json:"eventName"`
-	AwsRegion          string                 `json:"awsRegion"`
-	SourceIPAddress    string                 `json:"sourceIPAddress"`
-	UserAgent          string                 `json:"userAgent"`
-	ErrorCode          string                 `json:"errorCode"`
-	ErrorMessage       string                 `json:"errorMessage,omitempty"`
-	RequestParameters  map[string]interface{} `json:"requestParameters"`
-	RequestID          string                 `json:"requestID"`
-	EventID            string                 `json:"eventID"`
-	EventType          string                 `json:"eventType"`
-	APIVersion         string                 `json:"apiVersion"`
-	RecipientAccountID string                 `json:"recipientAccountID"`
-	//ResponseElements   map[string]interface{} `json:"responseElements"`
+	EventTime			string					`json:"eventTime"`
+	EventVersion		string					`json:"eventVersion"`
+	EventSource			string					`json:"eventSource"`
+	UserIdentity		map[string]interface{}}	`json:"userIdentity"`
+	EventName			string					`json:"eventName"`
+	AwsRegion			string					`json:"awsRegion"`
+	SourceIPAddress		string					`json:"sourceIPAddress"`
+	UserAgent			string					`json:"userAgent"`
+	ErrorCode			string					`json:"errorCode"`
+	ErrorMessage		string					`json:"errorMessage,omitempty"`
+	RequestParameters	map[string]interface{}	`json:"requestParameters"`
+	RequestID			string					`json:"requestID"`
+	EventID				string					`json:"eventID"`
+	EventType			string					`json:"eventType"`
+	APIVersion			string					`json:"apiVersion"`
+	RecipientAccountID	string					`json:"recipientAccountID"`
 }
 
 func init() {
@@ -112,6 +113,35 @@ func init() {
 func New() *CloudTrailbeat {
 	cb := &CloudTrailbeat{}
 	cb.CmdLineArgs = cmdLineArgs
+
+	cb.filesProcessed = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "s3_awslogs_beat_files",
+			Help: "The total number of S3 files with events processed",
+		}
+	)
+	cb.filesProcessedErrors = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "s3_awslogs_beat_file_errors",
+			Help: "The total number of errors ingesting S3 files with events",
+		}
+	)
+
+	cb.eventsProcessed = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "s3_awslogs_beat_events",
+			Help: "The total number of published events",
+		}
+	)
+	cb.eventsProcessedErrors = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "s3_awslogs_beat_events_errors",
+			Help: "The total number of errors with publishing events",
+		}
+	)
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":9400", nil)
 
 	return cb
 }
@@ -227,9 +257,11 @@ func (cb *CloudTrailbeat) runQueue() error {
 			logp.Info("Downloading and processing log file: s3://%s/%s", m.S3Bucket, m.S3ObjectKey)
 			lf, err := cb.readLogfile(m)
 			if err != nil {
+				cb.filesProcessedErrors.Inc()
 				logp.Err("Error reading log file [id: %s]: %s", m.MessageID, err)
 				continue
 			}
+			cb.filesProcessed.Inc()
 
 			if err := cb.publishEvents(lf); err != nil {
 				logp.Err("Error publishing CloudTrail events [id: %s]: %s", m.MessageID, err)
@@ -274,7 +306,7 @@ func (cb *CloudTrailbeat) runBackfill() error {
 
 func (cb *CloudTrailbeat) pushQueue(bucket, key string) error {
 	body := ctMessage{
-		S3Bucket:    bucket,
+		S3Bucket:	bucket,
 		S3ObjectKey: []string{key},
 	}
 	b, err := json.Marshal(body)
@@ -290,7 +322,7 @@ func (cb *CloudTrailbeat) pushQueue(bucket, key string) error {
 
 	q := sqs.New(session.New(cb.awsConfig))
 	_, err = q.SendMessage(&sqs.SendMessageInput{
-		QueueUrl:    aws.String(cb.sqsURL),
+		QueueUrl:	aws.String(cb.sqsURL),
 		MessageBody: aws.String(string(m)),
 	})
 	if err != nil {
@@ -317,21 +349,24 @@ func (cb *CloudTrailbeat) publishEvents(ct cloudtrailLog) error {
 
 	for _, cte := range ct.Records {
 		timestamp, err := time.Parse(logTimeFormat, cte.EventTime)
+
 		if err != nil {
 			logp.Err("Unable to parse EventTime : %s", cte.EventTime)
 		}
 
 		be := common.MapStr{
 			"@timestamp": common.Time(timestamp),
-			"type":       "CloudTrail",
+			"type":	   "CloudTrail",
 			"cloudtrail": cte,
 		}
 
 		events = append(events, be)
 	}
 	if !cb.events.PublishEvents(events, publisher.Sync, publisher.Guaranteed) {
+		cb.eventsProcessedErrors.Inc(len(events))
 		return fmt.Errorf("Error publishing events")
 	}
+	cb.eventsProcessed.Inc(len(events))
 
 	return nil
 }
@@ -342,7 +377,7 @@ func (cb *CloudTrailbeat) readLogfile(m ctMessage) (cloudtrailLog, error) {
 	s := s3.New(session.New(cb.awsConfig))
 	q := s3.GetObjectInput{
 		Bucket: aws.String(m.S3Bucket),
-		Key:    aws.String(m.S3ObjectKey[0]),
+		Key:	aws.String(m.S3ObjectKey[0]),
 	}
 	o, err := s.GetObject(&q)
 	if err != nil {
@@ -365,7 +400,7 @@ func (cb *CloudTrailbeat) fetchMessages() ([]ctMessage, error) {
 
 	q := sqs.New(session.New(cb.awsConfig))
 	params := &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(cb.sqsURL),
+		QueueUrl:			aws.String(cb.sqsURL),
 		MaxNumberOfMessages: aws.Int64(int64(cb.numQueueFetch)),
 	}
 
@@ -411,7 +446,7 @@ func (cb *CloudTrailbeat) fetchMessages() ([]ctMessage, error) {
 func (cb *CloudTrailbeat) deleteMessage(m ctMessage) error {
 	q := sqs.New(session.New(cb.awsConfig))
 	params := &sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(cb.sqsURL),
+		QueueUrl:	  aws.String(cb.sqsURL),
 		ReceiptHandle: aws.String(m.ReceiptHandle),
 	}
 

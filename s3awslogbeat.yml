@@ -23,6 +23,11 @@ input:
     # default: false
     no_purge: true
 
+    match_counters:
+      - name: root_events
+        field: cloudtrail.userIdentity.type
+        match: Root
+
 ############################# Output ##########################################
 
 # Configure what outputs to use when sending the data collected by the beat.

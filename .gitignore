@@ -2,3 +2,5 @@
 cloudtrailbeat
 testconfig.yml
 *~
+vendor/
+data/
