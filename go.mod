@@ -5,7 +5,6 @@ go 1.18
 require (
 	github.com/aws/aws-sdk-go v1.1.30-0.20160523211634-c76e8918e8f0
 	github.com/elastic/beats v5.0.0-alpha1.0.20160419145706-a0f543d88691+incompatible
-	github.com/neilschelly/s3awslogbeat v0.0.0-20200129120126-4591d3cae63e
 	github.com/prometheus/client_golang v1.15.0
 )
 
