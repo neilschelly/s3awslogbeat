@@ -374,7 +374,7 @@ func (logbeat *S3AwsLogBeat) publishCloudTrailEvents(logs cloudtrailLog) error {
 			logp.Err("Unable to parse EventTime : %s", logEvent.EventTime)
 		}
 
-		logp.Info("Event Type: %v", logEvent.UserIdentity["Type"])
+		logp.Info("Event Type: %v", logEvent.UserIdentity["type"])
 
 		le := common.MapStr{
 			"@timestamp": common.Time(timestamp),
