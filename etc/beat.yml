@@ -1,8 +1,8 @@
-################### CloudTrailbeat Configuration Example #########################
+################### s3awslogbeat Configuration Example #########################
  
-##################################################################################
+################################################################################
 input:
-    # Full URL of SQS which will be polled to identify new CloudTrail log events
+    # Full URL of SQS which will be polled to identify new S3 AWS log events
     # default: no default
     sqs_url: "https://sqs.us-east-1.amazonaws.com/xxxxxxxxxxxxxx/cloudtrail-events"
 

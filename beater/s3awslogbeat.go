@@ -29,32 +29,35 @@ import (
 
 const logTimeFormat = "2006-01-02T15:04:05Z"
 
-// CloudTrailbeat contains configuration options specific to the current
+// S3AwsLogBeat contains configuration options specific to the current
 //  running instance as defined in cmd line arguments and the configuration
 //  file.
-type CloudTrailbeat struct {
+type S3AwsLogBeat struct {
+	version			string
 	sqsURL			string
 	awsConfig		*aws.Config
 	numQueueFetch	int
 	sleepTime		time.Duration
 	noPurge			bool
+	logMode			string
 
 	backfillBucket	string
 	backfillPrefix	string
 
-	CTbConfig		ConfigSettings
-	CmdLineArgs		CmdLineArgs
-	events			publisher.Client
-	done			chan struct{}
+	S3AwsLogBeatConfig	ConfigSettings
+	CmdLineArgs			CmdLineArgs
+	events				publisher.Client
+	done				chan struct{}
 
 	filesProcessed			prometheus.Counter
 	filesProcessedErrors	prometheus.Counter
 	eventsProcessed			prometheus.Counter
 	eventsProcessedErrors	prometheus.Counter
+	info					prometheus.Gauge
 }
 
 // CmdLineArgs is used by the flag package to parse custom flags specific
-//  to CloudTrailbeat
+//  to S3AwsLogBeat
 type CmdLineArgs struct {
 	backfillBucket		*string
 	backfillPrefix		*string
@@ -75,8 +78,8 @@ type sqsMessage struct {
 	UnsubscribeURL		string
 }
 
-// CloudTrail specific information extracted from sqsMessage and sqsMessage.Message
-type ctMessage struct {
+// S3 Logfile specific information extracted from sqsMessage and sqsMessage.Message
+type s3awslogMessage struct {
 	S3Bucket		string		`json:"s3Bucket"`
 	S3ObjectKey		[]string	`json:"s3ObjectKey"`
 	MessageID		string		`json:",omitempty"`
@@ -115,161 +118,177 @@ func init() {
 	}
 }
 
-func New() *CloudTrailbeat {
-	cb := &CloudTrailbeat{}
-	cb.CmdLineArgs = cmdLineArgs
+func New() *S3AwsLogBeat {
+	logbeat := &S3AwsLogBeat{}
+	logbeat.CmdLineArgs = cmdLineArgs
 
-	cb.filesProcessed = promauto.NewCounter(
+	logbeat.filesProcessed = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_files",
 			Help: "The total number of S3 files with events processed",
 		})
-	cb.filesProcessedErrors = promauto.NewCounter(
+	logbeat.filesProcessedErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_file_errors",
 			Help: "The total number of errors ingesting S3 files with events",
 		})
 
-	cb.eventsProcessed = promauto.NewCounter(
+	logbeat.eventsProcessed = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_events",
 			Help: "The total number of published events",
 		})
-	cb.eventsProcessedErrors = promauto.NewCounter(
+	logbeat.eventsProcessedErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_events_errors",
 			Help: "The total number of errors with publishing events",
 		})
+	logbeat.info = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "s3_awslogs_info",
+			Help: "Information about the running S3 AWS Logs Beat configuration",
+			ConstLabels: prometheus.Labels{"log_mode": logbeat.logMode, "version": logbeat.version},
+		})
+	logbeat.info.Set(1)
 
-	return cb
+	return logbeat
 }
 
-func (cb *CloudTrailbeat) Config(b *beat.Beat) error {
-	if err := cfgfile.Read(&cb.CTbConfig, ""); err != nil {
+func (logbeat *S3AwsLogBeat) Config(b *beat.Beat) error {
+	if err := cfgfile.Read(&logbeat.S3AwsLogBeatConfig, ""); err != nil {
 		logp.Err("Error reading configuration file: %v", err)
 		return err
 	}
 
 	//Validate and instantiate configuration file variables
-	if cb.CTbConfig.Input.SQSUrl != nil {
-		cb.sqsURL = *cb.CTbConfig.Input.SQSUrl
+	if logbeat.S3AwsLogBeatConfig.Input.SQSUrl != nil {
+		logbeat.sqsURL = *logbeat.S3AwsLogBeatConfig.Input.SQSUrl
 	} else {
 		return errors.New("Invalid SQS URL in configuration file")
 	}
 
-	if cb.CTbConfig.Input.NumQueueFetch != nil {
-		cb.numQueueFetch = *cb.CTbConfig.Input.NumQueueFetch
+	if logbeat.S3AwsLogBeatConfig.Input.NumQueueFetch != nil {
+		logbeat.numQueueFetch = *logbeat.S3AwsLogBeatConfig.Input.NumQueueFetch
 	} else {
-		cb.numQueueFetch = 1
+		logbeat.numQueueFetch = 1
 	}
 
-	if cb.CTbConfig.Input.SleepTime != nil {
-		cb.sleepTime = time.Duration(*cb.CTbConfig.Input.SleepTime) * time.Second
+	if logbeat.S3AwsLogBeatConfig.Input.SleepTime != nil {
+		logbeat.sleepTime = time.Duration(*logbeat.S3AwsLogBeatConfig.Input.SleepTime) * time.Second
 	} else {
-		cb.sleepTime = time.Minute * 5
+		logbeat.sleepTime = time.Minute * 5
 	}
 
-	if cb.CTbConfig.Input.NoPurge != nil {
-		cb.noPurge = *cb.CTbConfig.Input.NoPurge
+	if logbeat.S3AwsLogBeatConfig.Input.NoPurge != nil {
+		logbeat.noPurge = *logbeat.S3AwsLogBeatConfig.Input.NoPurge
 	} else {
-		cb.noPurge = false
+		logbeat.noPurge = false
+	}
+
+	if logbeat.S3AwsLogBeatConfig.Input.LogMode != nil {
+		logbeat.logMode = *logbeat.S3AwsLogBeatConfig.Input.LogMode
+	} else {
+		logbeat.logMode = "cloudtrail"
 	}
 
 	// use AWS credentials from configuration file if provided, fall back to ENV and ~/.aws/credentials
-	if cb.CTbConfig.Input.AWSCredentialProvider != nil {
-		cb.awsConfig = &aws.Config{
-			Credentials: credentials.NewSharedCredentials("", "cb.CTbConfig.Input.AWSCredentialProvider"),
+	if logbeat.S3AwsLogBeatConfig.Input.AWSCredentialProvider != nil {
+		logbeat.awsConfig = &aws.Config{
+			Credentials: credentials.NewSharedCredentials("", "logbeat.S3AwsLogBeatConfig.Input.AWSCredentialProvider"),
 		}
 	} else {
-		cb.awsConfig = aws.NewConfig()
+		logbeat.awsConfig = aws.NewConfig()
 	}
 
-	if cb.CTbConfig.Input.AWSRegion != nil {
-		cb.awsConfig = cb.awsConfig.WithRegion(*cb.CTbConfig.Input.AWSRegion)
+	if logbeat.S3AwsLogBeatConfig.Input.AWSRegion != nil {
+		logbeat.awsConfig = logbeat.awsConfig.WithRegion(*logbeat.S3AwsLogBeatConfig.Input.AWSRegion)
 	}
 
 	// parse cmd line flags to determine if backfill or queue mode is being used
-	if cb.CmdLineArgs.backfillBucket != nil {
-		cb.backfillBucket = *cb.CmdLineArgs.backfillBucket
+	if logbeat.CmdLineArgs.backfillBucket != nil {
+		logbeat.backfillBucket = *logbeat.CmdLineArgs.backfillBucket
 
-		if cb.CmdLineArgs.backfillPrefix != nil {
-			cb.backfillPrefix = *cb.CmdLineArgs.backfillPrefix
+		if logbeat.CmdLineArgs.backfillPrefix != nil {
+			logbeat.backfillPrefix = *logbeat.CmdLineArgs.backfillPrefix
 		}
 	}
 
-	logp.Debug("cloudtrailbeat", "Init cloudtrailbeat")
-	logp.Debug("cloudtrailbeat", "SQS Url: %s", cb.sqsURL)
-	logp.Debug("cloudtrailbeat", "Number of items to fetch from queue: %d", cb.numQueueFetch)
-	logp.Debug("cloudtrailbeat", "Time to sleep when queue is empty: %.0f", cb.sleepTime.Seconds())
-	logp.Debug("cloudtrailbeat", "Events will be deleted from SQS when processed: %t", cb.noPurge)
-	logp.Debug("cloudtrailbeat", "Backfill bucket: %s", cb.backfillBucket)
-	logp.Debug("cloudtrailbeat", "Backfill prefix: %s", cb.backfillPrefix)
+	logbeat.version = b.Version
+
+	logp.Debug("s3awslogbeat", "Init s3awslogbeat")
+	logp.Debug("s3awslogbeat", "SQS Url: %s", logbeat.sqsURL)
+	logp.Debug("s3awslogbeat", "Log Mode: %s", logbeat.logMode)
+	logp.Debug("s3awslogbeat", "Number of items to fetch from queue: %d", logbeat.numQueueFetch)
+	logp.Debug("s3awslogbeat", "Time to sleep when queue is empty: %.0f", logbeat.sleepTime.Seconds())
+	logp.Debug("s3awslogbeat", "Events will be deleted from SQS when processed: %t", logbeat.noPurge)
+	logp.Debug("s3awslogbeat", "Backfill bucket: %s", logbeat.backfillBucket)
+	logp.Debug("s3awslogbeat", "Backfill prefix: %s", logbeat.backfillPrefix)
 
 	return nil
 }
 
-func (cb *CloudTrailbeat) Setup(b *beat.Beat) error {
-	cb.events = b.Events
-	cb.done = make(chan struct{})
+func (logbeat *S3AwsLogBeat) Setup(b *beat.Beat) error {
+	logbeat.events = b.Events
+	logbeat.done = make(chan struct{})
 	return nil
 }
 
-func (cb *CloudTrailbeat) Run(b *beat.Beat) error {
+func (logbeat *S3AwsLogBeat) Run(b *beat.Beat) error {
 	http.Handle("/metrics", promhttp.Handler())
 	go http.ListenAndServe(":9400", nil)
 
-	if cb.backfillBucket != "" {
+	if logbeat.backfillBucket != "" {
 		logp.Info("Running in backfill mode")
-		if err := cb.runBackfill(); err != nil {
+		if err := logbeat.runBackfill(); err != nil {
 			return fmt.Errorf("Error backfilling logs: %s", err)
 		}
 	} else {
 		logp.Info("Running in queue mode")
-		if err := cb.runQueue(); err != nil {
+		if err := logbeat.runQueue(); err != nil {
 			return fmt.Errorf("Error processing queue: %s", err)
 		}
 	}
 	return nil
 }
 
-func (cb *CloudTrailbeat) runQueue() error {
+func (logbeat *S3AwsLogBeat) runQueue() error {
 	for {
 		select {
-		case <-cb.done:
+		case <-logbeat.done:
 			return nil
 		default:
 		}
 
-		messages, err := cb.fetchMessages()
+		messages, err := logbeat.fetchMessages()
 		if err != nil {
 			logp.Err("Error fetching messages from SQS: %v", err)
 			break
 		}
 
 		if len(messages) == 0 {
-			logp.Info("No new events to process, sleeping for %.0f seconds", cb.sleepTime.Seconds())
-			time.Sleep(cb.sleepTime)
+			logp.Info("No new events to process, sleeping for %.0f seconds", logbeat.sleepTime.Seconds())
+			time.Sleep(logbeat.sleepTime)
 			continue
 		}
 
-		logp.Info("Fetched %d new CloudTrail events from SQS.", len(messages))
+		logp.Info("Fetched %d new events from SQS.", len(messages))
 		// fetch and process each log file
 		for _, m := range messages {
 			logp.Info("Downloading and processing log file: s3://%s/%s", m.S3Bucket, m.S3ObjectKey)
-			lf, err := cb.readLogfile(m)
+			lf, err := logbeat.readCloudTrailLogfile(m)
 			if err != nil {
-				cb.filesProcessedErrors.Inc()
+				logbeat.filesProcessedErrors.Inc()
 				logp.Err("Error reading log file [id: %s]: %s", m.MessageID, err)
 				continue
 			}
-			cb.filesProcessed.Inc()
+			logbeat.filesProcessed.Inc()
 
-			if err := cb.publishEvents(lf); err != nil {
-				logp.Err("Error publishing CloudTrail events [id: %s]: %s", m.MessageID, err)
+			if err := logbeat.publishCloudTrailEvents(lf); err != nil {
+				logp.Err("Error publishing events [id: %s]: %s", m.MessageID, err)
 				continue
 			}
-			if !cb.noPurge {
-				if err := cb.deleteMessage(m); err != nil {
+			if !logbeat.noPurge {
+				if err := logbeat.deleteMessage(m); err != nil {
 					logp.Err("Error deleting proccessed SQS event [id: %s]: %s", m.MessageID, err)
 				}
 			}
@@ -279,20 +298,20 @@ func (cb *CloudTrailbeat) runQueue() error {
 	return nil
 }
 
-func (cb *CloudTrailbeat) runBackfill() error {
-	logp.Info("Backfilling using S3 bucket: s3://%s/%s", cb.backfillBucket, cb.backfillPrefix)
+func (logbeat *S3AwsLogBeat) runBackfill() error {
+	logp.Info("Backfilling using S3 bucket: s3://%s/%s", logbeat.backfillBucket, logbeat.backfillPrefix)
 
-	s := s3.New(session.New(cb.awsConfig))
+	s := s3.New(session.New(logbeat.awsConfig))
 	q := s3.ListObjectsInput{
-		Bucket: aws.String(cb.backfillBucket),
-		Prefix: aws.String(cb.backfillPrefix),
+		Bucket: aws.String(logbeat.backfillBucket),
+		Prefix: aws.String(logbeat.backfillPrefix),
 	}
 
 	if list, err := s.ListObjects(&q); err == nil {
 		for _, e := range list.Contents {
 			if strings.HasSuffix(*e.Key, ".json.gz") {
 				logp.Info("Found log file to add to queue: %s", *e.Key)
-				if err := cb.pushQueue(cb.backfillBucket, *e.Key); err != nil {
+				if err := logbeat.pushQueue(logbeat.backfillBucket, *e.Key); err != nil {
 					logp.Err("Failed to push log file onto queue: %s", err)
 					return fmt.Errorf("Queue push failed: %s", err)
 				}
@@ -305,8 +324,8 @@ func (cb *CloudTrailbeat) runBackfill() error {
 	return nil
 }
 
-func (cb *CloudTrailbeat) pushQueue(bucket, key string) error {
-	body := ctMessage{
+func (logbeat *S3AwsLogBeat) pushQueue(bucket, key string) error {
+	body := s3awslogMessage{
 		S3Bucket:	bucket,
 		S3ObjectKey: []string{key},
 	}
@@ -321,9 +340,9 @@ func (cb *CloudTrailbeat) pushQueue(bucket, key string) error {
 		return err
 	}
 
-	q := sqs.New(session.New(cb.awsConfig))
+	q := sqs.New(session.New(logbeat.awsConfig))
 	_, err = q.SendMessage(&sqs.SendMessageInput{
-		QueueUrl:	aws.String(cb.sqsURL),
+		QueueUrl:	aws.String(logbeat.sqsURL),
 		MessageBody: aws.String(string(m)),
 	})
 	if err != nil {
@@ -333,49 +352,49 @@ func (cb *CloudTrailbeat) pushQueue(bucket, key string) error {
 	return nil
 }
 
-func (cb *CloudTrailbeat) Stop() {
-	close(cb.done)
+func (logbeat *S3AwsLogBeat) Stop() {
+	close(logbeat.done)
 }
 
-func (cb *CloudTrailbeat) Cleanup(b *beat.Beat) error {
+func (logbeat *S3AwsLogBeat) Cleanup(b *beat.Beat) error {
 	return nil
 }
 
-func (cb *CloudTrailbeat) publishEvents(ct cloudtrailLog) error {
-	if len(ct.Records) < 1 {
+func (logbeat *S3AwsLogBeat) publishCloudTrailEvents(logs cloudtrailLog) error {
+	if len(logs.Records) < 1 {
 		return nil
 	}
 
-	events := make([]common.MapStr, 0, len(ct.Records))
+	events := make([]common.MapStr, 0, len(logs.Records))
 
-	for _, cte := range ct.Records {
-		timestamp, err := time.Parse(logTimeFormat, cte.EventTime)
+	for _, logEvent := range logs.Records {
+		timestamp, err := time.Parse(logTimeFormat, logEvent.EventTime)
 
 		if err != nil {
-			logp.Err("Unable to parse EventTime : %s", cte.EventTime)
+			logp.Err("Unable to parse EventTime : %s", logEvent.EventTime)
 		}
 
-		be := common.MapStr{
+		le := common.MapStr{
 			"@timestamp": common.Time(timestamp),
 			"type":	   "CloudTrail",
-			"cloudtrail": cte,
+			"cloudtrail": logEvent,
 		}
 
-		events = append(events, be)
+		events = append(events, le)
 	}
-	if !cb.events.PublishEvents(events, publisher.Sync, publisher.Guaranteed) {
-		cb.eventsProcessedErrors.Add(float64(len(events)))
+	if !logbeat.events.PublishEvents(events, publisher.Sync, publisher.Guaranteed) {
+		logbeat.eventsProcessedErrors.Add(float64(len(events)))
 		return fmt.Errorf("Error publishing events")
 	}
-	cb.eventsProcessed.Add(float64(len(events)))
+	logbeat.eventsProcessed.Add(float64(len(events)))
 
 	return nil
 }
 
-func (cb *CloudTrailbeat) readLogfile(m ctMessage) (cloudtrailLog, error) {
+func (logbeat *S3AwsLogBeat) readCloudTrailLogfile(m s3awslogMessage) (cloudtrailLog, error) {
 	events := cloudtrailLog{}
 
-	s := s3.New(session.New(cb.awsConfig))
+	s := s3.New(session.New(logbeat.awsConfig))
 	q := s3.GetObjectInput{
 		Bucket: aws.String(m.S3Bucket),
 		Key:	aws.String(m.S3ObjectKey[0]),
@@ -396,13 +415,13 @@ func (cb *CloudTrailbeat) readLogfile(m ctMessage) (cloudtrailLog, error) {
 	return events, nil
 }
 
-func (cb *CloudTrailbeat) fetchMessages() ([]ctMessage, error) {
-	var m []ctMessage
+func (logbeat *S3AwsLogBeat) fetchMessages() ([]s3awslogMessage, error) {
+	var m []s3awslogMessage
 
-	q := sqs.New(session.New(cb.awsConfig))
+	q := sqs.New(session.New(logbeat.awsConfig))
 	params := &sqs.ReceiveMessageInput{
-		QueueUrl:			aws.String(cb.sqsURL),
-		MaxNumberOfMessages: aws.Int64(int64(cb.numQueueFetch)),
+		QueueUrl:			aws.String(logbeat.sqsURL),
+		MaxNumberOfMessages: aws.Int64(int64(logbeat.numQueueFetch)),
 	}
 
 	resp, err := q.ReceiveMessage(params)
@@ -410,7 +429,7 @@ func (cb *CloudTrailbeat) fetchMessages() ([]ctMessage, error) {
 		return m, fmt.Errorf("SQS ReceiveMessage error: %s", err.Error())
 	}
 
-	//no new meesages in queue
+	//no new messages in queue
 	if len(resp.Messages) == 0 {
 		return nil, nil
 	}
@@ -421,14 +440,14 @@ func (cb *CloudTrailbeat) fetchMessages() ([]ctMessage, error) {
 			return nil, fmt.Errorf("SQS message JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
 		}
 
-		event := ctMessage{}
+		event := s3awslogMessage{}
 		if err := json.Unmarshal([]byte(tmsg.Message), &event); err != nil {
 			return nil, fmt.Errorf("SQS body JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
 		}
 
 		if tmsg.Message == "CloudTrail validation message." {
-			if !cb.noPurge {
-				if err := cb.deleteMessage(event); err != nil {
+			if !logbeat.noPurge {
+				if err := logbeat.deleteMessage(event); err != nil {
 					return nil, fmt.Errorf("Error deleting 'validation message' [id: %s]: %s", tmsg.MessageID, err)
 				}
 			}
@@ -444,10 +463,10 @@ func (cb *CloudTrailbeat) fetchMessages() ([]ctMessage, error) {
 	return m, nil
 }
 
-func (cb *CloudTrailbeat) deleteMessage(m ctMessage) error {
-	q := sqs.New(session.New(cb.awsConfig))
+func (logbeat *S3AwsLogBeat) deleteMessage(m s3awslogMessage) error {
+	q := sqs.New(session.New(logbeat.awsConfig))
 	params := &sqs.DeleteMessageInput{
-		QueueUrl:	  aws.String(cb.sqsURL),
+		QueueUrl:	  aws.String(logbeat.sqsURL),
 		ReceiptHandle: aws.String(m.ReceiptHandle),
 	}
 

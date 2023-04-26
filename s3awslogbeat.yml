@@ -2,7 +2,7 @@
  
 ##################################################################################
 input:
-    # Full URL of SQS which will be polled to identify new CloudTrail log events
+    # Full URL of SQS which will be polled to identify new S3 AWS log events
     # default: no default
     sqs_url: "https://sqs.us-east-1.amazonaws.com/xxxxxxxxxxxxxx/cloudtrail-events"
 
@@ -22,6 +22,9 @@ input:
     # this is useful for debug purposes.
     # default: false
     no_purge: true
+
+    # FIXME: Future plans to support vpcflowlog and guardduty (and others)
+    log_mode: cloudtrail
 
     match_counters:
       - name: root_events
