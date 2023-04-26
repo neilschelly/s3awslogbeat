@@ -143,13 +143,6 @@ func New() *S3AwsLogBeat {
 			Name: "s3_awslogs_beat_events_errors",
 			Help: "The total number of errors with publishing events",
 		})
-	logbeat.info = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "s3_awslogs_info",
-			Help: "Information about the running S3 AWS Logs Beat configuration",
-			ConstLabels: prometheus.Labels{"log_mode": logbeat.logMode, "version": logbeat.version},
-		})
-	logbeat.info.Set(1)
 
 	return logbeat
 }
@@ -214,6 +207,13 @@ func (logbeat *S3AwsLogBeat) Config(b *beat.Beat) error {
 	}
 
 	logbeat.version = b.Version
+	logbeat.info = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "s3_awslogs_info",
+			Help: "Information about the running S3 AWS Logs Beat configuration",
+			ConstLabels: prometheus.Labels{"log_mode": logbeat.logMode, "version": logbeat.version},
+		})
+	logbeat.info.Set(1)
 
 	logp.Debug("s3awslogbeat", "Init s3awslogbeat")
 	logp.Debug("s3awslogbeat", "SQS Url: %s", logbeat.sqsURL)
