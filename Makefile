@@ -14,3 +14,6 @@ GOX_OS=linux
 .PHONY: build
 build: $(GOFILES)
 	go build -o $(BEATNAME)
+
+container:
+	docker build . -t s3awslogbeat:latest
