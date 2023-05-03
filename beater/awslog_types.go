@@ -1,7 +1,6 @@
 package beater
 
 import (
-	"fmt"
 	"strings"
 )
 
