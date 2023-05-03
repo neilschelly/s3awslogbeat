@@ -28,8 +28,9 @@ input:
 
     match_counters:
       - name: root_events
-        field: cloudtrail.userIdentity.type
-        match: Root
+        help: Counter of number of operations done by AWS root account
+        field: 'UserIdentity.type'
+        match: 'Root'
 
 ############################# Output ##########################################
 

@@ -17,6 +17,7 @@ type ConfigSettings struct {
 
 type MatchCounter struct {
 	Name                  *string `config:"name"`
+	Help                  *string `config:"help"`
 	Field                 *string `config:"field"`
 	Match                 *string `config:"match"`
 }

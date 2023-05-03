@@ -54,6 +54,7 @@ type S3AwsLogBeat struct {
 	eventsProcessed			prometheus.Counter
 	eventsProcessedErrors	prometheus.Counter
 	info					prometheus.Gauge
+	customCounterMetrics	[]customCounterMetric
 }
 
 // CmdLineArgs is used by the flag package to parse custom flags specific
@@ -86,29 +87,11 @@ type s3awslogMessage struct {
 	ReceiptHandle	string		`json:",omitempty"`
 }
 
-// data struct matching the defined fields of a CloudTrail Record as
-//  described in:
-//  http://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-record-contents.html
-type cloudtrailLog struct {
-	Records []cloudtrailEvent
-}
-type cloudtrailEvent struct {
-	EventTime			string					`json:"eventTime"`
-	EventVersion		string					`json:"eventVersion"`
-	EventSource			string					`json:"eventSource"`
-	UserIdentity		map[string]interface{}	`json:"userIdentity"`
-	EventName			string					`json:"eventName"`
-	AwsRegion			string					`json:"awsRegion"`
-	SourceIPAddress		string					`json:"sourceIPAddress"`
-	UserAgent			string					`json:"userAgent"`
-	ErrorCode			string					`json:"errorCode"`
-	ErrorMessage		string					`json:"errorMessage,omitempty"`
-	RequestParameters	map[string]interface{}	`json:"requestParameters"`
-	RequestID			string					`json:"requestID"`
-	EventID				string					`json:"eventID"`
-	EventType			string					`json:"eventType"`
-	APIVersion			string					`json:"apiVersion"`
-	RecipientAccountID	string					`json:"recipientAccountID"`
+// Custom metrics will be stored in a list of structs
+type customCounterMetric struct {
+	Counter			prometheus.Counter
+	Field			string
+	Match			string
 }
 
 func init() {
@@ -206,6 +189,23 @@ func (logbeat *S3AwsLogBeat) Config(b *beat.Beat) error {
 		}
 	}
 
+	// Setup metrics for custom counters
+	for i := 0; i < len(logbeat.S3AwsLogBeatConfig.Input.MatchCounters); i++ {
+		logbeat.customCounterMetrics = append(
+			logbeat.customCounterMetrics, 
+			customCounterMetric{
+				Field: *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Field,
+				Match: *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Match,
+				Counter: promauto.NewCounter(
+					prometheus.CounterOpts{
+						Name: fmt.Sprintf("s3_awslogs_%s", *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Name),
+						Help: *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Help,
+					}),
+			})
+	}
+	logp.Info("match_counter metrics: %#v", logbeat.customCounterMetrics)
+
+	// Setup metric for general daemon information
 	logbeat.version = b.Version
 	logbeat.info = promauto.NewGauge(
 		prometheus.GaugeOpts{
@@ -374,7 +374,11 @@ func (logbeat *S3AwsLogBeat) publishCloudTrailEvents(logs cloudtrailLog) error {
 			logp.Err("Unable to parse EventTime : %s", logEvent.EventTime)
 		}
 
-		logp.Info("Event Type: %v", logEvent.UserIdentity["type"])
+		for _, counter := range logbeat.customCounterMetrics {
+			if cloudtrailMatchPattern(logEvent, counter.Field, counter.Match) {
+				counter.Counter.Inc()
+			}
+		}
 
 		le := common.MapStr{
 			"@timestamp": common.Time(timestamp),
