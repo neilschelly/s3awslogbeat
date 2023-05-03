@@ -190,16 +190,16 @@ func (logbeat *S3AwsLogBeat) Config(b *beat.Beat) error {
 	}
 
 	// Setup metrics for custom counters
-	for i := 0; i < len(logbeat.S3AwsLogBeatConfig.Input.MatchCounters); i++ {
+	for i := 0; i < len(logbeat.S3AwsLogBeatConfig.Metrics.MatchCounters); i++ {
 		logbeat.customCounterMetrics = append(
 			logbeat.customCounterMetrics, 
 			customCounterMetric{
-				Field: *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Field,
-				Match: *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Match,
+				Field: *logbeat.S3AwsLogBeatConfig.Metrics.MatchCounters[i].Field,
+				Match: *logbeat.S3AwsLogBeatConfig.Metrics.MatchCounters[i].Match,
 				Counter: promauto.NewCounter(
 					prometheus.CounterOpts{
-						Name: fmt.Sprintf("s3_awslogs_%s", *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Name),
-						Help: *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Help,
+						Name: fmt.Sprintf("s3_awslogs_%s", *logbeat.S3AwsLogBeatConfig.Metrics.MatchCounters[i].Name),
+						Help: *logbeat.S3AwsLogBeatConfig.Metrics.MatchCounters[i].Help,
 					}),
 			})
 		logbeat.customCounterMetrics[len(logbeat.customCounterMetrics)-1].Counter.Add(0)

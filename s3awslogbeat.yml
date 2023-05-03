@@ -26,10 +26,16 @@ input:
     # FIXME: Future plans to support vpcflowlog and guardduty (and others)
     log_mode: cloudtrail
 
+    # A list of custom counters. This won't work for strings deeper than 2
+    # levels into the JSON. Partial matches are okay; the `match` of "ec2" will
+    # also match "ec2.amazonaws.com". The `name` will be prefixed with
+    # "s3_awslogs_"
+
+metrics:
     match_counters:
       - name: root_events
         help: Counter of number of operations done by AWS root account
-        field: 'UserIdentity.type'
+        field: 'userIdentity.type'
         match: 'Root'
 
 ############################# Output ##########################################

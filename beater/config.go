@@ -8,11 +8,15 @@ type S3AwsLogConfig struct {
 	NumQueueFetch			*int    `config:"num_queue_fetch"`
 	SleepTime				*int    `config:"sleep_time"`
 	LogMode					*string `config:"log_mode"`
+}
+
+type MetricsConfig struct {
 	MatchCounters			[]MatchCounter `config:"match_counters"`
 }
 
 type ConfigSettings struct {
 	Input S3AwsLogConfig
+	Metrics MetricsConfig
 }
 
 type MatchCounter struct {
