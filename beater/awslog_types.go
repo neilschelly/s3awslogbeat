@@ -31,31 +31,34 @@ type cloudtrailEvent struct {
 }
 
 
-type clouttrailEventFieldFunction func(e *cloudtrailEvent) interface{}
+type cloudtrailEventFieldFunction func(e *cloudtrailEvent) interface{}
 
-var cloudtrailEventField = map[string]clouttrailEventFieldFunction{
-    "EventTime": func(t *cloudtrailEvent) interface{}          { return t.EventTime },
-    "EventVersion": func(t *cloudtrailEvent) interface{}       { return t.EventVersion },
-    "EventSource": func(t *cloudtrailEvent) interface{}        { return t.EventSource },
-    "UserIdentity": func(t *cloudtrailEvent) interface{}       { return t.UserIdentity },
-    "EventName": func(t *cloudtrailEvent) interface{}          { return t.EventName },
-    "AwsRegion": func(t *cloudtrailEvent) interface{}          { return t.AwsRegion },
-    "SourceIPAddress": func(t *cloudtrailEvent) interface{}    { return t.SourceIPAddress },
-    "UserAgent": func(t *cloudtrailEvent) interface{}          { return t.UserAgent },
-    "ErrorCode": func(t *cloudtrailEvent) interface{}          { return t.ErrorCode },
-    "ErrorMessage": func(t *cloudtrailEvent) interface{}       { return t.ErrorMessage },
-    "RequestParameters": func(t *cloudtrailEvent) interface{}  { return t.RequestParameters },
-    "RequestID": func(t *cloudtrailEvent) interface{}          { return t.RequestID },
-    "EventID": func(t *cloudtrailEvent) interface{}            { return t.EventID },
-    "EventType": func(t *cloudtrailEvent) interface{}          { return t.EventType },
-    "APIVersion": func(t *cloudtrailEvent) interface{}         { return t.APIVersion },
-    "RecipientAccountID": func(t *cloudtrailEvent) interface{} { return t.RecipientAccountID },
+var cloudtrailEventField = map[string]cloudtrailEventFieldFunction{
+    "EventTime": func(e *cloudtrailEvent) interface{}          { return e.EventTime },
+    "EventVersion": func(e *cloudtrailEvent) interface{}       { return e.EventVersion },
+    "EventSource": func(e *cloudtrailEvent) interface{}        { return e.EventSource },
+    "UserIdentity": func(e *cloudtrailEvent) interface{}       { return e.UserIdentity },
+    "EventName": func(e *cloudtrailEvent) interface{}          { return e.EventName },
+    "AwsRegion": func(e *cloudtrailEvent) interface{}          { return e.AwsRegion },
+    "SourceIPAddress": func(e *cloudtrailEvent) interface{}    { return e.SourceIPAddress },
+    "UserAgent": func(e *cloudtrailEvent) interface{}          { return e.UserAgent },
+    "ErrorCode": func(e *cloudtrailEvent) interface{}          { return e.ErrorCode },
+    "ErrorMessage": func(e *cloudtrailEvent) interface{}       { return e.ErrorMessage },
+    "RequestParameters": func(e *cloudtrailEvent) interface{}  { return e.RequestParameters },
+    "RequestID": func(e *cloudtrailEvent) interface{}          { return e.RequestID },
+    "EventID": func(e *cloudtrailEvent) interface{}            { return e.EventID },
+    "EventType": func(e *cloudtrailEvent) interface{}          { return e.EventType },
+    "APIVersion": func(e *cloudtrailEvent) interface{}         { return e.APIVersion },
+    "RecipientAccountID": func(e *cloudtrailEvent) interface{} { return e.RecipientAccountID },
 }
 
 func cloudtrailMatchPattern(event cloudtrailEvent, field string, search string) bool {
-	if strings.Contains(field, "RequestParameters.") {
+	if strings.Contains(field, ".") {
 		parts := strings.SplitN(field, ".", 2)
 		fmt.Printf("need to find %s in event.%s[\"%s\"]\n", search, parts[0], parts[1])
+		// search = string "Root"
+		// parts[0] = string "UserIdentity"
+		// parts[1] = string 
 		userIdentityFunction := cloudtrailEventField["UserIdentity"]
 		fmt.Printf("userIdentity Contents %v in event\n", userIdentityFunction)
 		userIdentityRaw := cloudtrailEventField[parts[0]]
