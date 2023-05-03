@@ -55,23 +55,10 @@ var cloudtrailEventField = map[string]cloudtrailEventFieldFunction{
 func cloudtrailMatchPattern(event cloudtrailEvent, field string, search string) bool {
 	if strings.Contains(field, ".") {
 		parts := strings.SplitN(field, ".", 2)
-		fmt.Printf("need to find %s in event.%s[\"%s\"]\n", search, parts[0], parts[1])
-		// search = string "Root"
-		// parts[0] = string "UserIdentity"
-		// parts[1] = string 
-		userIdentityFunction := cloudtrailEventField["UserIdentity"]
-		fmt.Printf("userIdentity Contents %v in event\n", userIdentityFunction)
-		userIdentityRaw := cloudtrailEventField[parts[0]]
-		fmt.Printf("userIdentity Contents %v in event\n", userIdentityRaw)
-		userIdentity := cloudtrailEventField[parts[0]](&event)
-		fmt.Printf("userIdentity Contents %v in event\n", userIdentity)
-		userIdentityInterface := cloudtrailEventField[parts[0]](&event).(map[string]interface{})
-		fmt.Printf("userIdentity Contents %v in event\n", userIdentityInterface)
-		searchField := cloudtrailEventField[parts[0]](&event).(map[string]interface{})[parts[1]].(string)
-		fmt.Printf("field Contents %v in event\n", searchField)
+		// fmt.Printf("need to find %s in event.%s[\"%s\"]\n", search, parts[0], parts[1])
 		return strings.Contains(cloudtrailEventField[parts[0]](&event).(map[string]interface{})[parts[1]].(string), search)
 	} else {
-		fmt.Printf("need to find %s in event.%s\n", search, field)
+		// fmt.Printf("need to find %s in event.%s\n", search, field)
 		return strings.Contains(cloudtrailEventField[field](&event).(string), search)
 	}
 	return false
