@@ -56,10 +56,13 @@ func cloudtrailMatchPattern(event cloudtrailEvent, field string, search string) 
 	if strings.Contains(field, "RequestParameters.") {
 		parts := strings.SplitN(field, ".", 2)
 		fmt.Printf("need to find %s in event.%s[\"%s\"]\n", search, parts[0], parts[1])
-		return strings.Contains(cloudtrailEventField[parts[0]](&event).(map[string]interface{})[parts[1]].(string), search)
+		searchField := cloudtrailEventField[parts[0]](&event).(map[string]interface{})[parts[1]].(string)
+		fmt.Printf("field contents is: .%s\n", searchField)
+		return strings.Contains(searchField, search)
 	} else {
 		fmt.Printf("need to find %s in event.%s\n", search, field)
-		return strings.Contains(cloudtrailEventField[field](&event).(string), search)
+		searchField := cloudtrailEventField[field](&event).(string)
+		return strings.Contains(searchField, search)
 	}
 	return false
 }
