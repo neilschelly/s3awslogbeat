@@ -1,3 +1,7 @@
 *.swp
-cloudtrailbeat
+s3awslogbeat
 testconfig.yml
+*~
+vendor/
+data/
+sample*
