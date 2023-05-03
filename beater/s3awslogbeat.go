@@ -376,6 +376,7 @@ func (logbeat *S3AwsLogBeat) publishCloudTrailEvents(logs cloudtrailLog) error {
 
 		for _, counter := range logbeat.customCounterMetrics {
 			if cloudtrailMatchPattern(logEvent, counter.Field, counter.Match) {
+				logp.Info("found match for counter")
 				counter.Counter.Inc()
 			}
 		}
