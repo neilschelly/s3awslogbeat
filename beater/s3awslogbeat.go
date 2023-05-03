@@ -202,7 +202,7 @@ func (logbeat *S3AwsLogBeat) Config(b *beat.Beat) error {
 						Help: *logbeat.S3AwsLogBeatConfig.Input.MatchCounters[i].Help,
 					}),
 			})
-		logbeat.customCounterMetrics[len(logbeat.customCounterMetrics)-1].Counter.Set(0)
+		logbeat.customCounterMetrics[len(logbeat.customCounterMetrics)-1].Counter.Add(0)
 	}
 	logp.Info("match_counter metrics: %#v", logbeat.customCounterMetrics)
 
