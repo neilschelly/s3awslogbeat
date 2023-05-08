@@ -122,7 +122,7 @@ func (logbeat *S3AwsLogBeat) publishCloudTrailEvents(logs cloudtrailLog) error {
 func (logbeat *S3AwsLogBeat) readCloudTrailLogfile(m sqsNotificationMessage) (cloudtrailLog, error) {
 	events := cloudtrailLog{}
 
-	s := s3.New(session.New(logbeat.awsConfig))
+	s := s3.New(session.New(logbeat.awsS3Config))
 	q := s3.GetObjectInput{
 		Bucket: aws.String(m.S3Bucket),
 		Key:	aws.String(m.S3ObjectKey[0]),

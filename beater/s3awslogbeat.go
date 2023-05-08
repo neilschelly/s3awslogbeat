@@ -33,7 +33,8 @@ const logTimeFormat = "2006-01-02T15:04:05Z"
 type S3AwsLogBeat struct {
 	version			string
 	sqsURL			string
-	awsConfig		*aws.Config
+	awsSQSConfig	*aws.Config
+	awsS3Config		*aws.Config
 	numQueueFetch	int
 	sleepTime		time.Duration
 	noPurge			bool
@@ -184,15 +185,20 @@ func (logbeat *S3AwsLogBeat) Config(b *beat.Beat) error {
 
 	// use AWS credentials from configuration file if provided, fall back to ENV and ~/.aws/credentials
 	if logbeat.S3AwsLogBeatConfig.Input.AWSCredentialProvider != nil {
-		logbeat.awsConfig = &aws.Config{
+		logbeat.awsS3Config = &aws.Config{
+			Credentials: credentials.NewSharedCredentials("", "logbeat.S3AwsLogBeatConfig.Input.AWSCredentialProvider"),
+		}
+		logbeat.awsSQSConfig = &aws.Config{
 			Credentials: credentials.NewSharedCredentials("", "logbeat.S3AwsLogBeatConfig.Input.AWSCredentialProvider"),
 		}
 	} else {
-		logbeat.awsConfig = aws.NewConfig()
+		logbeat.awsS3Config = aws.NewConfig()
+		logbeat.awsSQSConfig = aws.NewConfig()
 	}
 
 	if logbeat.S3AwsLogBeatConfig.Input.AWSRegion != nil {
-		logbeat.awsConfig = logbeat.awsConfig.WithRegion(*logbeat.S3AwsLogBeatConfig.Input.AWSRegion)
+		logbeat.awsS3Config = logbeat.awsS3Config.WithRegion(*logbeat.S3AwsLogBeatConfig.Input.AWSRegion)
+		logbeat.awsSQSConfig = logbeat.awsSQSConfig.WithRegion(*logbeat.S3AwsLogBeatConfig.Input.AWSRegion)
 	}
 
 	// parse cmd line flags to determine if backfill or queue mode is being used
@@ -327,7 +333,7 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 
 			if !logbeat.noPurge {
 				if err := logbeat.deleteMessage(m); err != nil {
-					logp.Err("Error deleting proccessed SQS event [messageID: %s]: %s", m.MessageID, err)
+					logp.Err("Error deleting processed SQS event [messageID: %s]: %s", m.MessageID, err)
 				}
 			}
 		}
@@ -339,7 +345,7 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 func (logbeat *S3AwsLogBeat) runBackfill() error {
 	logp.Info("Backfilling using S3 bucket: s3://%s/%s", logbeat.backfillBucket, logbeat.backfillPrefix)
 
-	s := s3.New(session.New(logbeat.awsConfig))
+	s := s3.New(session.New(logbeat.awsS3Config))
 	q := s3.ListObjectsInput{
 		Bucket: aws.String(logbeat.backfillBucket),
 		Prefix: aws.String(logbeat.backfillPrefix),
@@ -378,7 +384,7 @@ func (logbeat *S3AwsLogBeat) pushQueue(bucket, key string) error {
 		return err
 	}
 
-	q := sqs.New(session.New(logbeat.awsConfig))
+	q := sqs.New(session.New(logbeat.awsSQSConfig))
 	_, err = q.SendMessage(&sqs.SendMessageInput{
 		QueueUrl:	aws.String(logbeat.sqsURL),
 		MessageBody: aws.String(string(m)),
@@ -401,7 +407,7 @@ func (logbeat *S3AwsLogBeat) Cleanup(b *beat.Beat) error {
 func (logbeat *S3AwsLogBeat) fetchMessages() ([]sqsNotificationMessage, error) {
 	var m []sqsNotificationMessage
 
-	q := sqs.New(session.New(logbeat.awsConfig))
+	q := sqs.New(session.New(logbeat.awsSQSConfig))
 	params := &sqs.ReceiveMessageInput{
 		QueueUrl:			aws.String(logbeat.sqsURL),
 		MaxNumberOfMessages: aws.Int64(int64(logbeat.numQueueFetch)),
@@ -458,7 +464,7 @@ func (logbeat *S3AwsLogBeat) fetchMessages() ([]sqsNotificationMessage, error) {
 }
 
 func (logbeat *S3AwsLogBeat) deleteMessage(m sqsNotificationMessage) error {
-	q := sqs.New(session.New(logbeat.awsConfig))
+	q := sqs.New(session.New(logbeat.awsSQSConfig))
 	params := &sqs.DeleteMessageInput{
 		QueueUrl:	  aws.String(logbeat.sqsURL),
 		ReceiptHandle: aws.String(m.ReceiptHandle),
