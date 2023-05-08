@@ -24,7 +24,7 @@ input:
     no_purge: true
 
     # FIXME: Future plans to support vpcflowlog and guardduty (and others)
-    log_mode: cloudtrail
+    log_mode: vpcflowlog
 
 ###############################################################################
 metrics:

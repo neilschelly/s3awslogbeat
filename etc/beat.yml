@@ -22,3 +22,6 @@ input:
     # this is useful for debug purposes.
     # default: false
     no_purge: true
+
+    # FIXME: cloudtrail, vpcflowlog (and future plans for guardduty and others)
+    log_mode: vpcflowlog

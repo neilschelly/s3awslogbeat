@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"strings"
 	"time"
 	"net/http"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/elastic/beats/libbeat/beat"
 	"github.com/elastic/beats/libbeat/cfgfile"
-	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/beats/libbeat/publisher"
 
@@ -48,6 +46,7 @@ type S3AwsLogBeat struct {
 	CmdLineArgs			CmdLineArgs
 	events				publisher.Client
 	done				chan struct{}
+	csvFields			map[string]int // used for mapping fields in vpcflowlog
 
 	filesProcessed			prometheus.Counter
 	filesProcessedErrors	prometheus.Counter
@@ -69,6 +68,7 @@ var cmdLineArgs CmdLineArgs
 // SQS message extracted from raw sqs event Body
 type sqsMessage struct {
 	Type				string
+	Subject				string	`json:",omitempty"`
 	MessageID			string
 	TopicArn			string
 	Message				string
@@ -79,12 +79,27 @@ type sqsMessage struct {
 	UnsubscribeURL		string
 }
 
-// S3 Logfile specific information extracted from sqsMessage and sqsMessage.Message
-type s3awslogMessage struct {
-	S3Bucket		string		`json:"s3Bucket"`
-	S3ObjectKey		[]string	`json:"s3ObjectKey"`
+
+// CloudTrail S3 Logfile specific information extracted from sqsMessage and sqsMessage.Message
+type sqsNotificationMessage struct {
+	S3Bucket		string		`json:"s3Bucket,omitempty"`
+	S3ObjectKey		[]string	`json:"s3ObjectKey,omitempty"`
+	Records         []vpcFlowLogMessageObject `json:"Records,omitempty"`
 	MessageID		string		`json:",omitempty"`
 	ReceiptHandle	string		`json:",omitempty"`
+}
+
+type vpcFlowLogMessageObject struct {
+	EventTime		 string `json:"eventTime"`
+	AwsRegion			string	`json:"awsRegion"`
+	S3 struct {
+		Bucket struct {
+			Name		  string	  `json:"name"`
+		} `json:"bucket"`
+		Object		  struct {
+			Key	   string `json:"key"`
+		} `json:"object"`
+	} `json:"s3"`
 }
 
 // Custom metrics will be stored in a list of structs
@@ -275,22 +290,44 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 		logp.Info("Fetched %d new events from SQS.", len(messages))
 		// fetch and process each log file
 		for _, m := range messages {
-			logp.Info("Downloading and processing log file: s3://%s/%s", m.S3Bucket, m.S3ObjectKey)
-			lf, err := logbeat.readCloudTrailLogfile(m)
-			if err != nil {
-				logbeat.filesProcessedErrors.Inc()
-				logp.Err("Error reading log file [id: %s]: %s", m.MessageID, err)
-				continue
-			}
-			logbeat.filesProcessed.Inc()
+			switch logbeat.logMode {
+			case "cloudtrail":
+				logp.Info("Downloading and processing log file: s3://%s/%s", m.S3Bucket, m.S3ObjectKey)
+				lf, err := logbeat.readCloudTrailLogfile(m)
+				if err != nil {
+					logbeat.filesProcessedErrors.Inc()
+					logp.Err("Error reading log file [messageID: %s]: %s", m.MessageID, err)
+					continue
+				}
+				logbeat.filesProcessed.Inc()
+				
+				logp.Info("Publishing events from : s3://%s/%s", m.S3Bucket, m.S3ObjectKey)
+				if err := logbeat.publishCloudTrailEvents(lf); err != nil {
+					logp.Err("Error publishing events [messageID: %s]: %s", m.MessageID, err)
+					continue
+				}
+			case "vpcflowlog":
+				for _, r := range m.Records {
+					logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
+					lf, err := logbeat.readVpcFlowLogfile(r)
+					if err != nil {
+						logp.Err("Error reading log file [messageID: %s]: %s", m.MessageID, err)
+						continue
+					}
+					logbeat.filesProcessed.Inc()
 
-			if err := logbeat.publishCloudTrailEvents(lf); err != nil {
-				logp.Err("Error publishing events [id: %s]: %s", m.MessageID, err)
-				continue
+					if err := logbeat.publishVpcFlowLogEvents(lf); err != nil {
+						logp.Err("Error publishing events [messageID: %s]: %s", m.MessageID, err)
+						continue
+					}
+				}
+			default:
+				logp.Err("The logMode %s is not implemented.", logbeat.logMode)
 			}
+
 			if !logbeat.noPurge {
 				if err := logbeat.deleteMessage(m); err != nil {
-					logp.Err("Error deleting proccessed SQS event [id: %s]: %s", m.MessageID, err)
+					logp.Err("Error deleting proccessed SQS event [messageID: %s]: %s", m.MessageID, err)
 				}
 			}
 		}
@@ -326,7 +363,7 @@ func (logbeat *S3AwsLogBeat) runBackfill() error {
 }
 
 func (logbeat *S3AwsLogBeat) pushQueue(bucket, key string) error {
-	body := s3awslogMessage{
+	body := sqsNotificationMessage{
 		S3Bucket:	bucket,
 		S3ObjectKey: []string{key},
 	}
@@ -361,69 +398,8 @@ func (logbeat *S3AwsLogBeat) Cleanup(b *beat.Beat) error {
 	return nil
 }
 
-func (logbeat *S3AwsLogBeat) publishCloudTrailEvents(logs cloudtrailLog) error {
-	if len(logs.Records) < 1 {
-		return nil
-	}
-
-	events := make([]common.MapStr, 0, len(logs.Records))
-
-	for _, logEvent := range logs.Records {
-		timestamp, err := time.Parse(logTimeFormat, logEvent.EventTime)
-
-		if err != nil {
-			logp.Err("Unable to parse EventTime : %s", logEvent.EventTime)
-		}
-
-		for _, counter := range logbeat.customCounterMetrics {
-			if cloudtrailMatchPattern(logEvent, counter.Field, counter.Match) {
-				counter.Counter.Inc()
-			}
-		}
-
-		le := common.MapStr{
-			"@timestamp": common.Time(timestamp),
-			"type":	   "CloudTrail",
-			"cloudtrail": logEvent,
-		}
-
-		events = append(events, le)
-	}
-	if !logbeat.events.PublishEvents(events, publisher.Sync, publisher.Guaranteed) {
-		logbeat.eventsProcessedErrors.Add(float64(len(events)))
-		return fmt.Errorf("Error publishing events")
-	}
-	logbeat.eventsProcessed.Add(float64(len(events)))
-
-	return nil
-}
-
-func (logbeat *S3AwsLogBeat) readCloudTrailLogfile(m s3awslogMessage) (cloudtrailLog, error) {
-	events := cloudtrailLog{}
-
-	s := s3.New(session.New(logbeat.awsConfig))
-	q := s3.GetObjectInput{
-		Bucket: aws.String(m.S3Bucket),
-		Key:	aws.String(m.S3ObjectKey[0]),
-	}
-	o, err := s.GetObject(&q)
-	if err != nil {
-		return events, err
-	}
-	b, err := ioutil.ReadAll(o.Body)
-	if err != nil {
-		return events, err
-	}
-
-	if err := json.Unmarshal(b, &events); err != nil {
-		return events, fmt.Errorf("Error unmarshaling cloutrail JSON: %s", err.Error())
-	}
-
-	return events, nil
-}
-
-func (logbeat *S3AwsLogBeat) fetchMessages() ([]s3awslogMessage, error) {
-	var m []s3awslogMessage
+func (logbeat *S3AwsLogBeat) fetchMessages() ([]sqsNotificationMessage, error) {
+	var m []sqsNotificationMessage
 
 	q := sqs.New(session.New(logbeat.awsConfig))
 	params := &sqs.ReceiveMessageInput{
@@ -443,26 +419,37 @@ func (logbeat *S3AwsLogBeat) fetchMessages() ([]s3awslogMessage, error) {
 
 	for _, e := range resp.Messages {
 		tmsg := sqsMessage{}
+		event := sqsNotificationMessage{}
+		event.MessageID = tmsg.MessageID
+		event.ReceiptHandle = *e.ReceiptHandle
+
 		if err := json.Unmarshal([]byte(*e.Body), &tmsg); err != nil {
 			return nil, fmt.Errorf("SQS message JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
 		}
 
-		event := s3awslogMessage{}
+		switch logbeat.logMode {
+		case "cloudtrail":
+			if tmsg.Message == "CloudTrail validation message." {
+				if !logbeat.noPurge {
+					if err := logbeat.deleteMessage(event); err != nil {
+						return nil, fmt.Errorf("Error deleting 'validation message' [id: %s]: %s", tmsg.MessageID, err)
+					}
+				}
+				continue
+			}
+		case "vpcflowlog":
+			if (tmsg.Subject != "Amazon S3 Notification") {
+				logp.Info("vpcflowlogbeat", "Skipping SQS Message with Subject: %s [id: %s]", tmsg.Subject, *e.MessageId)
+				continue
+			}
+
+		default:
+			logp.Err("The logMode %s is not implemented.", logbeat.logMode)
+		}
+
 		if err := json.Unmarshal([]byte(tmsg.Message), &event); err != nil {
 			return nil, fmt.Errorf("SQS body JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
 		}
-
-		if tmsg.Message == "CloudTrail validation message." {
-			if !logbeat.noPurge {
-				if err := logbeat.deleteMessage(event); err != nil {
-					return nil, fmt.Errorf("Error deleting 'validation message' [id: %s]: %s", tmsg.MessageID, err)
-				}
-			}
-			continue
-		}
-
-		event.MessageID = tmsg.MessageID
-		event.ReceiptHandle = *e.ReceiptHandle
 
 		m = append(m, event)
 	}
@@ -470,7 +457,7 @@ func (logbeat *S3AwsLogBeat) fetchMessages() ([]s3awslogMessage, error) {
 	return m, nil
 }
 
-func (logbeat *S3AwsLogBeat) deleteMessage(m s3awslogMessage) error {
+func (logbeat *S3AwsLogBeat) deleteMessage(m sqsNotificationMessage) error {
 	q := sqs.New(session.New(logbeat.awsConfig))
 	params := &sqs.DeleteMessageInput{
 		QueueUrl:	  aws.String(logbeat.sqsURL),
