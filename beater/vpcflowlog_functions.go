@@ -140,9 +140,9 @@ func (logbeat *S3AwsLogBeat) publishVpcFlowLogEvents(logs vpcFlowLog) error {
 func (logbeat *S3AwsLogBeat) readVpcFlowLogfile(m vpcFlowLogMessageObject) (vpcFlowLog, error) {
 	events := vpcFlowLog{}
 
-	logbeat.awsConfig = logbeat.awsConfig.WithRegion(m.AwsRegion)
+	localAwsConfig = logbeat.awsConfig.WithRegion(m.AwsRegion)
 
-	s := s3.New(session.New(logbeat.awsConfig))
+	s := s3.New(session.New(localAwsConfig))
 	q := s3.GetObjectInput{
 		Bucket: aws.String(m.S3.Bucket.Name),
 		Key:	aws.String(m.S3.Object.Key),
@@ -310,7 +310,8 @@ func (logbeat *S3AwsLogBeat) getRowIndexValue(field string) (int) {
 	if index, ok := logbeat.csvFields[field]; ok {
 		returnValue = index
 	}
-	logp.Debug("vpcflowlogbeat", "getRowIndexValue %v yields %v", field, returnValue)
+	/* Too noisy even for debug mode
+	logp.Debug("vpcflowlogbeat", "getRowIndexValue %v yields %v", field, returnValue) */
 	return returnValue
 }
 
