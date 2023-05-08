@@ -140,7 +140,7 @@ func (logbeat *S3AwsLogBeat) publishVpcFlowLogEvents(logs vpcFlowLog) error {
 func (logbeat *S3AwsLogBeat) readVpcFlowLogfile(m vpcFlowLogMessageObject) (vpcFlowLog, error) {
 	events := vpcFlowLog{}
 
-	localAwsConfig = logbeat.awsConfig.WithRegion(m.AwsRegion)
+	var localAwsConfig := logbeat.awsConfig.WithRegion(m.AwsRegion)
 
 	s := s3.New(session.New(localAwsConfig))
 	q := s3.GetObjectInput{
