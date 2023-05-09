@@ -130,7 +130,7 @@ func New() *S3AwsLogBeat {
 		})
 	logbeat.notificationsProcessedErrors = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "s3_awslogs_beat_file_errors",
+			Name: "s3_awslogs_beat_notifications_errors",
 			Help: "The total number of errors ingesting SQS notifications",
 		})
 
