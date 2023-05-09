@@ -1,9 +1,19 @@
 package beater
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+
+	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/logp"
+	"github.com/elastic/beats/libbeat/publisher"
 )
 
 // data struct matching the defined fields of a CloudTrail Record as
@@ -30,7 +40,6 @@ type cloudtrailEvent struct {
 	APIVersion			string					`json:"apiVersion"`
 	RecipientAccountID	string					`json:"recipientAccountID"`
 }
-
 
 type cloudtrailEventFieldFunction func(e *cloudtrailEvent) interface{}
 
@@ -71,4 +80,65 @@ func cloudtrailMatchPattern(event cloudtrailEvent, field string, search string) 
 		}
 	}
 	return false
+}
+
+func (logbeat *S3AwsLogBeat) publishCloudTrailEvents(logs cloudtrailLog) error {
+	if len(logs.Records) < 1 {
+		return nil
+	}
+
+	events := make([]common.MapStr, 0, len(logs.Records))
+
+	for _, logEvent := range logs.Records {
+		timestamp, err := time.Parse(logTimeFormat, logEvent.EventTime)
+
+		if err != nil {
+			logp.Err("Unable to parse EventTime : %s", logEvent.EventTime)
+		}
+
+		for _, counter := range logbeat.customCounterMetrics {
+			if cloudtrailMatchPattern(logEvent, counter.Field, counter.Match) {
+				counter.Counter.Inc()
+			}
+		}
+
+		le := common.MapStr{
+			"@timestamp": common.Time(timestamp),
+			"type":	   "CloudTrail",
+			"cloudtrail": logEvent,
+		}
+
+		events = append(events, le)
+	}
+	if !logbeat.events.PublishEvents(events, publisher.Sync, publisher.Guaranteed) {
+		logbeat.eventsProcessedErrors.Add(float64(len(events)))
+		return fmt.Errorf("Error publishing events")
+	}
+	logbeat.eventsProcessed.Add(float64(len(events)))
+
+	return nil
+}
+
+func (logbeat *S3AwsLogBeat) readCloudTrailLogfile(m sqsNotificationMessage) (cloudtrailLog, error) {
+	events := cloudtrailLog{}
+
+	s := s3.New(session.New(logbeat.awsS3Config))
+	q := s3.GetObjectInput{
+		Bucket: aws.String(m.S3Bucket),
+		Key:	aws.String(m.S3ObjectKey[0]),
+	}
+	o, err := s.GetObject(&q)
+	if err != nil {
+		return events, err
+	}
+	b, err := ioutil.ReadAll(o.Body)
+	if err != nil {
+		return events, err
+	}
+
+	if err := json.Unmarshal(b, &events); err != nil {
+		return events, fmt.Errorf("Error unmarshaling cloutrail JSON: %s", err.Error())
+	}
+
+	return events, nil
 }
