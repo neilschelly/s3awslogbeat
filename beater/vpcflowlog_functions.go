@@ -111,6 +111,7 @@ func (logbeat *S3AwsLogBeat) publishVpcFlowLogEvents(logs vpcFlowLog) error {
 
 		if err != nil {
 			logp.Err("Unable to parse EventTime : %s", logEvent.EventTime)
+			logbeat.eventsProcessedErrors.Add(float64(len(events)))
 		}
 
 		for _, counter := range logbeat.customCounterMetrics {

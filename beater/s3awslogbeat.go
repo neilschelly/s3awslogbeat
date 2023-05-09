@@ -49,6 +49,8 @@ type S3AwsLogBeat struct {
 	done				chan struct{}
 	csvFields			map[string]int // used for mapping fields in vpcflowlog
 
+	notificationsProcessed	prometheus.Counter
+	notificationsProcessedErrors	prometheus.Counter
 	filesProcessed			prometheus.Counter
 	filesProcessedErrors	prometheus.Counter
 	eventsProcessed			prometheus.Counter
@@ -120,6 +122,17 @@ func init() {
 func New() *S3AwsLogBeat {
 	logbeat := &S3AwsLogBeat{}
 	logbeat.CmdLineArgs = cmdLineArgs
+
+	logbeat.notificationsProcessed = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "s3_awslogs_beat_notifications",
+			Help: "The total number of SQS notifications processed",
+		})
+	logbeat.notificationsProcessedErrors = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "s3_awslogs_beat_file_errors",
+			Help: "The total number of errors ingesting SQS notifications",
+		})
 
 	logbeat.filesProcessed = promauto.NewCounter(
 		prometheus.CounterOpts{
@@ -284,6 +297,7 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 		messages, err := logbeat.fetchMessages()
 		if err != nil {
 			logp.Err("Error fetching messages from SQS: %v", err)
+			logbeat.notificationsProcessedErrors.Inc()
 			break
 		}
 
@@ -294,6 +308,8 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 		}
 
 		logp.Info("Fetched %d new events from SQS.", len(messages))
+		logbeat.notificationsProcessed.Add(float64(len(messages)))
+
 		// fetch and process each log file
 		for _, m := range messages {
 			switch logbeat.logMode {
