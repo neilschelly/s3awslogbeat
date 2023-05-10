@@ -130,6 +130,7 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 	if err != nil {
 		//return events, fmt.Errorf("Error gunzipping %v: %+v", m.S3.Object.Key, err)
 		logp.Err("Error gunzipping %v: %+v", m.S3.Object.Key, err)
+		logp.Err("Content: %+v", o.Body)
 		panic(err) // or handle it another way
 	}
 
