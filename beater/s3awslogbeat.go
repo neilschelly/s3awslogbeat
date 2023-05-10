@@ -457,12 +457,13 @@ func (logbeat *S3AwsLogBeat) fetchMessages() ([]sqsNotificationMessage, error) {
 	for _, e := range resp.Messages {
 		tmsg := sqsMessage{}
 		event := sqsNotificationMessage{}
-		event.MessageId = tmsg.MessageId
-		event.ReceiptHandle = *e.ReceiptHandle
 
 		if err := json.Unmarshal([]byte(*e.Body), &tmsg); err != nil {
 			return nil, fmt.Errorf("SQS message JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
 		}
+
+		event.MessageId = tmsg.MessageId
+		event.ReceiptHandle = *e.ReceiptHandle
 
 		switch logbeat.logMode {
 		case "cloudtrail":
