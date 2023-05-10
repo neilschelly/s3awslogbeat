@@ -128,7 +128,7 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 
 	gunzip, err := gzip.NewReader(o.Body)
 	if err != nil {
-		return events, fmt.Errorf("Error gunzipping %v", q)
+		return events, fmt.Errorf("Error gunzipping %v: %v", q.Key, err)
 	}
 
 	logp.Info("Reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)

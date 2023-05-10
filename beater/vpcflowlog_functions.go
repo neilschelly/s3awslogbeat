@@ -298,7 +298,7 @@ func (logbeat *S3AwsLogBeat) readVpcFlowLogfile(m messageObject) (vpcFlowLog, er
 			}
 		}
 
-		logp.Debug("vpcflowlogbeat", "created event, %v", event)
+		logp.Debug("s3awslogbeat", "created event, %v", event)
 		events.Records = append(events.Records, event)
 	}
 	logp.Info("Finished reading rows into VPCFlowLog events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
@@ -312,7 +312,7 @@ func (logbeat *S3AwsLogBeat) getRowIndexValue(field string) (int) {
 		returnValue = index
 	}
 	/* Too noisy even for debug mode
-	logp.Debug("vpcflowlogbeat", "getRowIndexValue %v yields %v", field, returnValue) */
+	logp.Debug("s3awslogbeat", "getRowIndexValue %v yields %v", field, returnValue) */
 	return returnValue
 }
 
@@ -321,5 +321,5 @@ func (logbeat *S3AwsLogBeat) createFieldMap(headerRow ...string) {
 	for i, h := range headerRow {
 		logbeat.csvFields[h] = i
 	}
-	logp.Debug("vpcflowlogbeat", "CSV Fields Parsed: %v", logbeat.csvFields)
+	logp.Debug("s3awslogbeat", "CSV Fields Parsed: %v", logbeat.csvFields)
 }
