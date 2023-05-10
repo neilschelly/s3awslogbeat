@@ -87,12 +87,12 @@ type sqsMessage struct {
 type sqsNotificationMessage struct {
 	S3Bucket		string		`json:"s3Bucket,omitempty"`
 	S3ObjectKey		[]string	`json:"s3ObjectKey,omitempty"`
-	Records         []vpcFlowLogMessageObject `json:"Records,omitempty"`
+	Records         []messageObject `json:"Records,omitempty"`
 	MessageID		string		`json:",omitempty"`
 	ReceiptHandle	string		`json:",omitempty"`
 }
 
-type vpcFlowLogMessageObject struct {
+type messageObject struct {
 	EventTime		 string `json:"eventTime"`
 	AwsRegion			string	`json:"awsRegion"`
 	S3 struct {
@@ -339,6 +339,21 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 					logbeat.filesProcessed.Inc()
 
 					if err := logbeat.publishVpcFlowLogEvents(lf); err != nil {
+						logp.Err("Error publishing events [messageID: %s]: %s", m.MessageID, err)
+						continue
+					}
+				}
+			case "guardduty":
+				for _, r := range m.Records {
+					logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
+					lf, err := logbeat.readGuardDutyLogfile(r)
+					if err != nil {
+						logp.Err("Error reading log file [messageID: %s]: %s", m.MessageID, err)
+						continue
+					}
+					logbeat.filesProcessed.Inc()
+
+					if err := logbeat.publishGuardDutyEvents(lf); err != nil {
 						logp.Err("Error publishing events [messageID: %s]: %s", m.MessageID, err)
 						continue
 					}

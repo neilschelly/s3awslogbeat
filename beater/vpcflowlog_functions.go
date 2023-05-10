@@ -138,7 +138,7 @@ func (logbeat *S3AwsLogBeat) publishVpcFlowLogEvents(logs vpcFlowLog) error {
 	return nil
 }
 
-func (logbeat *S3AwsLogBeat) readVpcFlowLogfile(m vpcFlowLogMessageObject) (vpcFlowLog, error) {
+func (logbeat *S3AwsLogBeat) readVpcFlowLogfile(m messageObject) (vpcFlowLog, error) {
 	events := vpcFlowLog{}
 
 	logbeat.awsS3Config = logbeat.awsS3Config.WithRegion(m.AwsRegion)
