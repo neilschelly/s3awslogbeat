@@ -120,6 +120,7 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 	q := s3.GetObjectInput{
 		Bucket: aws.String(m.S3.Bucket.Name),
 		Key:	aws.String(m.S3.Object.Key),
+		SSECustomerAlgorithm: aws.String("AES256"),
 		SSECustomerKey:	aws.String("arn:aws:kms:us-east-1:580760757891:key/f4261c50-b5fd-47f2-987b-5ca9231d44af"),
 	}
 	o, err := s.GetObject(&q)
