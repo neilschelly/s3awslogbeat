@@ -139,6 +139,7 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 				break
 			} else {
 				logp.Info("Error unmarshaling guardduty JSON: %+v", err)
+				logp.Info("START%+vEND", jsonLine)
 				logp.Info("%+v\n", jsonLine)
 			}
 		}
