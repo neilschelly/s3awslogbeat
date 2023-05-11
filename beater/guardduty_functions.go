@@ -127,14 +127,6 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 	}
 
 	b := bufio.NewReader(o.Body)
-	for {
-		string, err := b.ReadString('\n')
-		fmt.Printf("err = %v string = %v\n", err, string)
-		if err == io.EOF {
-			break
-		}
-	}
-
 	logp.Info("Reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
 	for {
 		var event guarddutyEvent
