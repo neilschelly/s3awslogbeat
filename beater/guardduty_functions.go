@@ -141,10 +141,14 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 		jsonLine, err := b.ReadString('\n')
 
 		if err := json.Unmarshal([]byte(jsonLine), &event); err != nil {
-			logp.Info("Error unmarshaling guardduty JSON: %s", err.Error())
-			logp.Info("%+v\n", jsonLine)
-			panic(err)
-			continue
+			if len(jsonLine) == 0 && err == io.EOF {
+				// last line will be empty with newline
+				logp.Info("Last line of logfile is empty: %+v", err)
+				break
+			} else {
+				logp.Info("Error unmarshaling guardduty JSON: %+v", err)
+				logp.Info("%+v\n", jsonLine)
+			}
 		}
 
 		logp.Debug("s3awslogbeat", "created event, %v", event)
