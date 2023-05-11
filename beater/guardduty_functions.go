@@ -1,12 +1,11 @@
 package beater
 
 import (
-/*	"encoding/json"*/
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 	"io"
-	// "compress/gzip"
 	"bufio"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -135,36 +134,28 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 			break
 		}
 	}
-	panic("did a thing")
-/*	gunzip, err := gzip.NewReader(o.Body)
-	if err != nil {
-		//return events, fmt.Errorf("Error gunzipping %v: %+v", m.S3.Object.Key, err)
-		logp.Err("Error gunzipping %v: %+v", m.S3.Object.Key, err)
-		logp.Err("Content: %+v", o)
-		panic(err) // or handle it another way
-	}*/
 
-/*	logp.Info("Reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
+	logp.Info("Reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
 	for {
-		var row []byte
-		_, err := gunzip.Read(row)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			logp.Err("Unknown error reading row from logfile: %v", err)
-			panic(err) // or handle it another way
-		}
-
 		var event guarddutyEvent
+		jsonLine, err := b.ReadString('\n')
 
-		if err := json.Unmarshal([]byte(row), &events); err != nil {
-			return events, fmt.Errorf("Error unmarshaling guardduty JSON: %s", err.Error())
+		if err := json.Unmarshal([]byte(jsonLine), &event); err != nil {
+			logp.Info("Error unmarshaling guardduty JSON: %s", err.Error())
+			continue
 		}
 
 		logp.Debug("s3awslogbeat", "created event, %v", event)
 		events.Records = append(events.Records, event)
+
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			logp.Err("Unknown error reading row from logfile: %v", err)
+			break
+		}
 	}
-	logp.Info("Finished reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)*/
+	logp.Info("Finished reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
 
 	return events, nil
 }
