@@ -128,18 +128,24 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 
 	b := bufio.NewReader(o.Body)
 	logp.Info("Reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
+	var lastLine bool
+	lastLine = false
 	for {
 		var event guarddutyEvent
 		jsonLine, err := b.ReadString('\n')
+		if err == io.EOF {
+			// last line of input
+			lastLine = true
+		}
 
 		if err := json.Unmarshal([]byte(jsonLine), &event); err != nil {
-			if len(jsonLine) == 0 && err == io.EOF {
+			if len(jsonLine) == 0 && lastLine {
 				// last line will be empty with newline
 				logp.Info("Last line of logfile is empty: %+v", err)
 				break
 			} else {
 				logp.Info("Error unmarshaling guardduty JSON: %+v", err)
-				logp.Info("START%+vEND", jsonLine)
+				logp.Info("START%+vEND %d", jsonLine, len(jsonLine))
 				logp.Info("%+v\n", jsonLine)
 			}
 		}
