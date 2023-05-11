@@ -30,7 +30,7 @@ type guarddutyEvent struct {
 	Type				string					`json:"type"`
 	Resource			map[string]interface{}	`json:"resource"`
 	Service				map[string]interface{}	`json:"service"`
-	Severity			string					`json:"severity"`
+	Severity			int64					`json:"severity"`
 	CreatedAt			string					`json:"createdAt"`
 	UpdatedAt			string					`json:"updatedAt"`
 	Title				string					`json:"title"`
