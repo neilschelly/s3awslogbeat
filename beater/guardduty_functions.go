@@ -7,6 +7,7 @@ import (
 	"time"
 	"io"
 	// "compress/gzip"
+	"bufio"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -126,17 +127,15 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 		return events, err
 	}
 
-	b := make([]byte, 8)
+	b := bufio.NewReader(o.Body)
 	for {
-		n, err := o.Body.Read(b)
-		fmt.Printf("n = %v err = %v b = %v\n", n, err, b)
-		fmt.Printf("b[:n] = %q\n", b[:n])
+		string, err := b.ReadString('\n')
+		fmt.Printf("err = %v string = %v\n", err, string)
 		if err == io.EOF {
 			break
 		}
-		panic("did a thing")
 	}
-
+	panic("did a thing")
 /*	gunzip, err := gzip.NewReader(o.Body)
 	if err != nil {
 		//return events, fmt.Errorf("Error gunzipping %v: %+v", m.S3.Object.Key, err)
