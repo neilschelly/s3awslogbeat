@@ -142,6 +142,8 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 
 		if err := json.Unmarshal([]byte(jsonLine), &event); err != nil {
 			logp.Info("Error unmarshaling guardduty JSON: %s", err.Error())
+			logp.Info("%+v\n", jsonLine)
+			panic(err)
 			continue
 		}
 
