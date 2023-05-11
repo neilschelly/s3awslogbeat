@@ -137,7 +137,7 @@ func (logbeat *S3AwsLogBeat) readCloudTrailLogfile(m sqsNotificationMessage) (cl
 	}
 
 	if err := json.Unmarshal(b, &events); err != nil {
-		return events, fmt.Errorf("Error unmarshaling cloutrail JSON: %s", err.Error())
+		return events, fmt.Errorf("Error unmarshaling cloudtrail JSON: %s", err.Error())
 	}
 
 	return events, nil
