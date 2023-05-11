@@ -1,12 +1,12 @@
 package beater
 
 import (
-	"encoding/json"
+/*	"encoding/json"*/
 	"fmt"
 	"strings"
 	"time"
 	"io"
-	"compress/gzip"
+	// "compress/gzip"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -126,15 +126,26 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 		return events, err
 	}
 
-	gunzip, err := gzip.NewReader(o.Body)
+	b := make([]byte, 8)
+	for {
+		n, err := o.Body.Read(b)
+		fmt.Printf("n = %v err = %v b = %v\n", n, err, b)
+		fmt.Printf("b[:n] = %q\n", b[:n])
+		if err == io.EOF {
+			break
+		}
+		panic("did a thing")
+	}
+
+/*	gunzip, err := gzip.NewReader(o.Body)
 	if err != nil {
 		//return events, fmt.Errorf("Error gunzipping %v: %+v", m.S3.Object.Key, err)
 		logp.Err("Error gunzipping %v: %+v", m.S3.Object.Key, err)
 		logp.Err("Content: %+v", o)
 		panic(err) // or handle it another way
-	}
+	}*/
 
-	logp.Info("Reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
+/*	logp.Info("Reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
 	for {
 		var row []byte
 		_, err := gunzip.Read(row)
@@ -154,7 +165,7 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 		logp.Debug("s3awslogbeat", "created event, %v", event)
 		events.Records = append(events.Records, event)
 	}
-	logp.Info("Finished reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)
+	logp.Info("Finished reading rows into GuardDuty events: s3://%s/%s", m.S3.Bucket.Name, m.S3.Object.Key)*/
 
 	return events, nil
 }
