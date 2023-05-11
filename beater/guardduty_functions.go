@@ -145,7 +145,6 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 				break
 			} else {
 				logp.Info("Error unmarshaling guardduty JSON: %+v", err)
-				logp.Info("START%+vEND %d", jsonLine, len(jsonLine))
 				logp.Info("%+v\n", jsonLine)
 			}
 		}
@@ -153,10 +152,7 @@ func (logbeat *S3AwsLogBeat) readGuardDutyLogfile(m messageObject) (guarddutyLog
 		logp.Debug("s3awslogbeat", "created event, %v", event)
 		events.Records = append(events.Records, event)
 
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			logp.Err("Unknown error reading row from logfile: %v", err)
+		if lastLine {
 			break
 		}
 	}
