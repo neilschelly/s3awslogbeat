@@ -90,6 +90,7 @@ type sqsNotificationMessage struct {
 	Records         []messageObject `json:"Records,omitempty"`
 	MessageId		string		`json:",omitempty"`
 	ReceiptHandle	string		`json:",omitempty"`
+	EcrScanningResult	ecrScanningNotification	`json:",omitempty"`
 }
 
 type messageObject struct {
@@ -308,10 +309,10 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 		}
 
 		logp.Info("Fetched %d new events from SQS.", len(messages))
-		logbeat.notificationsProcessed.Add(float64(len(messages)))
 
 		// fetch and process each log file
 		for _, m := range messages {
+			logbeat.notificationsProcessed.Inc()
 			switch logbeat.logMode {
 			case "cloudtrail":
 				logp.Info("Downloading and processing log file: s3://%s/%s", m.S3Bucket, m.S3ObjectKey)
@@ -357,6 +358,11 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 						logp.Err("Error publishing events [MessageId: %s]: %s", m.MessageId, err)
 						continue
 					}
+				}
+			case "ecrscanning":
+				if err := logbeat.publishEcrScanningNotificationEvents(m.EcrScanningResult); err != nil {
+					logp.Err("Error publishing events [MessageId: %s]: %s", m.MessageId, err)
+					continue
 				}
 			default:
 				logp.Err("The logMode %s is not implemented.", logbeat.logMode)
@@ -458,12 +464,21 @@ func (logbeat *S3AwsLogBeat) fetchMessages() ([]sqsNotificationMessage, error) {
 		tmsg := sqsMessage{}
 		event := sqsNotificationMessage{}
 
-		if err := json.Unmarshal([]byte(*e.Body), &tmsg); err != nil {
-			return nil, fmt.Errorf("SQS message JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
+		if logbeat.logMode == "ecrscanning" {
+			// ECR scanning notifications have all the info we need
+			if err := json.Unmarshal([]byte(*e.Body), &event.EcrScanningResult); err != nil {
+				return nil, fmt.Errorf("SQS message JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
+			}
+			event.MessageId = *e.MessageId
+			event.ReceiptHandle = *e.ReceiptHandle
+		} else {
+			// Other SQS notifications require parsing messages in a body in a message, etc
+			if err := json.Unmarshal([]byte(*e.Body), &tmsg); err != nil {
+				return nil, fmt.Errorf("SQS message JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
+			}
+			event.MessageId = tmsg.MessageId
+			event.ReceiptHandle = *e.ReceiptHandle
 		}
-
-		event.MessageId = tmsg.MessageId
-		event.ReceiptHandle = *e.ReceiptHandle
 
 		switch logbeat.logMode {
 		case "cloudtrail":
@@ -482,12 +497,17 @@ func (logbeat *S3AwsLogBeat) fetchMessages() ([]sqsNotificationMessage, error) {
 			}
 		case "guardduty":
 
+		case "ecrscanning":
+
 		default:
 			logp.Err("The logMode %s is not implemented.", logbeat.logMode)
 		}
 
-		if err := json.Unmarshal([]byte(tmsg.Message), &event); err != nil {
-			return nil, fmt.Errorf("SQS body JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
+		if logbeat.logMode != "ecrscanning" {
+			// EcrScanningResult is already in event
+			if err := json.Unmarshal([]byte(tmsg.Message), &event); err != nil {
+				return nil, fmt.Errorf("SQS body JSON parse error [id: %s]: %s", *e.MessageId, err.Error())
+			}
 		}
 
 		m = append(m, event)
