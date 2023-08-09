@@ -82,10 +82,13 @@ func (logbeat *S3AwsLogBeat) publishGuardDutyEvents(logs guarddutyLog) error {
 	events := make([]common.MapStr, 0, len(logs.Records))
 
 	for _, logEvent := range logs.Records {
-		timestamp, err := time.Parse(logTimeFormat, logEvent.CreatedAt)
+		timestamp, err := time.Parse(logTimeFormat, logEvent.UpdatedAt)
 
 		if err != nil {
-			logp.Err("Unable to parse CreatedAt : %s", logEvent.CreatedAt)
+			timestamp, err := time.Parse(logTimeFormat, logEvent.CreatedAt)
+			if err != nil {
+				logp.Err("Unable to parse CreatedAt : %s", logEvent.UpdatedAt)
+			}
 		}
 
 		for _, counter := range logbeat.customCounterMetrics {
