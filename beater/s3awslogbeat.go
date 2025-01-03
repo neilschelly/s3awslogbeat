@@ -51,8 +51,8 @@ type S3AwsLogBeat struct {
 
 	notificationsProcessed	prometheus.Counter
 	notificationsProcessedErrors	prometheus.Counter
-	filesProcessed			prometheus.Counter
-	filesProcessedErrors	prometheus.Counter
+	filesProcessed			*prometheus.CounterVec
+	filesProcessedErrors	*prometheus.CounterVec
 	eventsProcessed			prometheus.Counter
 	eventsProcessedErrors	prometheus.Counter
 	info					prometheus.Gauge
@@ -135,16 +135,16 @@ func New() *S3AwsLogBeat {
 			Help: "The total number of errors ingesting SQS notifications",
 		})
 
-	logbeat.filesProcessed = promauto.NewCounter(
+	logbeat.filesProcessed = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_files",
 			Help: "The total number of S3 files with events processed",
-		})
-	logbeat.filesProcessedErrors = promauto.NewCounter(
+		}, []string{"bucket"})
+	logbeat.filesProcessedErrors = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "s3_awslogs_beat_file_errors",
 			Help: "The total number of errors ingesting S3 files with events",
-		})
+		}, []string{"bucket"})
 
 	logbeat.eventsProcessed = promauto.NewCounter(
 		prometheus.CounterOpts{
@@ -318,11 +318,11 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 				logp.Info("Downloading and processing log file: s3://%s/%s", m.S3Bucket, m.S3ObjectKey)
 				lf, err := logbeat.readCloudTrailLogfile(m)
 				if err != nil {
-					logbeat.filesProcessedErrors.Inc()
+					logbeat.filesProcessedErrors.WithLabelValues(m.S3Bucket).Inc()
 					logp.Err("Error reading log file [MessageId: %s]: %s", m.MessageId, err)
 					continue
 				}
-				logbeat.filesProcessed.Inc()
+				logbeat.filesProcessed.WithLabelValues(m.S3Bucket).Inc()
 				
 				logp.Info("Publishing events from : s3://%s/%s", m.S3Bucket, m.S3ObjectKey)
 				if err := logbeat.publishCloudTrailEvents(lf); err != nil {
@@ -334,10 +334,11 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 					logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
 					lf, err := logbeat.readVpcFlowLogfile(r)
 					if err != nil {
+						logbeat.filesProcessedErrors.WithLabelValues(r.S3.Bucket.Name).Inc()
 						logp.Err("Error reading log file [MessageId: %s]: %s", m.MessageId, err)
 						continue
 					}
-					logbeat.filesProcessed.Inc()
+					logbeat.filesProcessed.WithLabelValues(r.S3.Bucket.Name).Inc()
 
 					if err := logbeat.publishVpcFlowLogEvents(lf); err != nil {
 						logp.Err("Error publishing events [MessageId: %s]: %s", m.MessageId, err)
@@ -349,10 +350,11 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 					logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
 					lf, err := logbeat.readGuardDutyLogfile(r)
 					if err != nil {
+						logbeat.filesProcessedErrors.WithLabelValues(r.S3.Bucket.Name).Inc()
 						logp.Err("Error reading log file [MessageId: %s]: %s", m.MessageId, err)
 						continue
 					}
-					logbeat.filesProcessed.Inc()
+					logbeat.filesProcessed.WithLabelValues(r.S3.Bucket.Name).Inc()
 
 					if err := logbeat.publishGuardDutyEvents(lf); err != nil {
 						logp.Err("Error publishing events [MessageId: %s]: %s", m.MessageId, err)
