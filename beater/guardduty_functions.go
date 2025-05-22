@@ -74,6 +74,44 @@ func guarddutyMatchPattern(event guarddutyEvent, field string, search string) bo
 	return false
 }
 
+func guarddutyCheckUnusualField(event guarddutyEvent) guarddutyEvent {
+	/*
+	guardduty.service.additionalInfo.unusual is sometimes not there, sometimes
+	a map, sometimes a number, and sometimes a string. The whole additionalInfo
+	structure is unpredictable depending on the type of GuardDuty event it is.
+	Here are some examples from generating sample findings:
+	https://github.com/mozilla-services/foxsec-pipeline/blob/master/src/test/resources/testdata/gatekeeper/guardduty-sample-findings.txt
+
+	The goal here is to make it more consistent for the benefit of Elasticsearch
+	mapping and indexing.
+	- If it is not there, pass the event unchanged.
+	- If it is a map, pass the event unchanged.
+	- If it is anything else, convert it to a map with "value" set to "VALUE"
+	*/
+
+	new_unusual := make(map[string]string)
+	if service := guarddutyEventField["service"](&event); service != nil {
+		if additionalInfo := service.(map[string]interface{})["additionalInfo"]; additionalInfo != nil {
+			if unusual := additionalInfo.(map[string]interface{})["unusual"]; unusual != nil {
+				if _, ok := unusual.(map[string]interface{}); ok {
+					logp.Debug("s3awslogbeat", "guardduty.service.additionalInfo.unusual is a map already.")
+					return event
+				}
+				if _, ok := unusual.(string); ok {
+					logp.Debug("s3awslogbeat", "guardduty.service.additionalInfo.unusual is a string: %+v", unusual)
+					new_unusual["value"] = unusual.(string)
+				} else if _, ok := unusual.(float64); ok {
+					logp.Debug("s3awslogbeat", "guardduty.service.additionalInfo.unusual is a number: %+v", unusual)
+					new_unusual["value"] = fmt.Sprintf("%0.0f", unusual.(float64))
+				}
+				additionalInfo.(map[string]interface{})["unusual"] = new_unusual
+			}
+		}
+	}
+
+	return event
+}
+
 func (logbeat *S3AwsLogBeat) publishGuardDutyEvents(logs guarddutyLog) error {
 	if len(logs.Records) < 1 {
 		return nil
@@ -98,6 +136,8 @@ func (logbeat *S3AwsLogBeat) publishGuardDutyEvents(logs guarddutyLog) error {
 				counter.Counter.Inc()
 			}
 		}
+
+		logEvent = guarddutyCheckUnusualField(logEvent)
 
 		le := common.MapStr{
 			"@timestamp": common.Time(timestamp),
