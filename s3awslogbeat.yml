@@ -37,6 +37,10 @@ metrics:
         help: Counter of number of operations done by AWS root account
         field: 'userIdentity.type'
         match: 'Root'
+      - name: unusual_dns_resolver
+        help: Counter of number of unusual DNS resolver GuardDuty events
+        field: 'guardduty.type'
+        match: 'DefenseEvasion:EC2/UnusualDNSResolver'
 
 ############################# Output ##########################################
 
