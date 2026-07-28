@@ -375,13 +375,13 @@ func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject, m sqsNotificationMes
 	if err != nil {
 		logbeat.filesProcessedErrors.WithLabelValues(r.S3.Bucket.Name).Inc()
 		logp.Err("Error reading log file [MessageId: %s]: %s", m.MessageId, err)
-		return
+		return nil
 	}
 	logbeat.filesProcessed.WithLabelValues(r.S3.Bucket.Name).Inc()
 
 	if err := logbeat.publishVpcFlowLogEvents(lf); err != nil {
 		logp.Err("Error publishing events [MessageId: %s]: %s", m.MessageId, err)
-		return
+		return nil
 	}
 }
 
