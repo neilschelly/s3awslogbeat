@@ -331,7 +331,7 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 				}
 			case "vpcflowlog":
 				for _, r := range m.Records {
-					go logbeat.runVpcFlowLog(r)
+					go logbeat.runVpcFlowLog(r, m)
 				}
 			case "guardduty":
 				for _, r := range m.Records {
@@ -369,7 +369,7 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 	return nil
 }
 
-func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject) error {
+func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject, m sqsNotificationMessage) error {
 	logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
 	lf, err := logbeat.readVpcFlowLogfile(r)
 	if err != nil {
