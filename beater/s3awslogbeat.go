@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 	"net/http"
+	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -330,9 +331,12 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 					continue
 				}
 			case "vpcflowlog":
+				var vpcRunGroup sync.WaitGroup
 				for _, r := range m.Records {
-					go logbeat.runVpcFlowLog(r, m)
+					vpcRunGroup.Add(1)
+					go logbeat.runVpcFlowLog(r, m, &vpcRunGroup)
 				}
+				vpcRunGroup.Wait()
 			case "guardduty":
 				for _, r := range m.Records {
 					logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
@@ -369,8 +373,9 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 	return nil
 }
 
-func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject, m sqsNotificationMessage) error {
+func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject, m sqsNotificationMessage, vpcRunGroup *sync.WaitGroup) error {
 	logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
+	defer vpcRunGroup.Done()
 	lf, err := logbeat.readVpcFlowLogfile(r)
 	if err != nil {
 		logbeat.filesProcessedErrors.WithLabelValues(r.S3.Bucket.Name).Inc()
