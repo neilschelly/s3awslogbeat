@@ -383,6 +383,7 @@ func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject, m sqsNotificationMes
 		logp.Err("Error publishing events [MessageId: %s]: %s", m.MessageId, err)
 		return nil
 	}
+	return nil
 }
 
 func (logbeat *S3AwsLogBeat) runBackfill() error {
