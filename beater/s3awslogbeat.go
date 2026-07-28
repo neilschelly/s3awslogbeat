@@ -335,10 +335,8 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 				for _, r := range m.Records {
 					parallelRunGroup.Add(1)
 					logp.Info("Launching goroutine for s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
-					logp.Sync()
 					go logbeat.runVpcFlowLog(r, m, &parallelRunGroup)
 					logp.Info("Looping...")
-					logp.Sync()
 				}
 				parallelRunGroup.Wait()
 			case "guardduty":
@@ -379,7 +377,6 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 
 func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject, m sqsNotificationMessage, parallelRunGroup *sync.WaitGroup) error {
 	logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
-	logp.Sync()
 	defer parallelRunGroup.Done()
 	lf, err := logbeat.readVpcFlowLogfile(r)
 	if err != nil {
