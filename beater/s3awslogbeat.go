@@ -334,9 +334,7 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 			case "vpcflowlog":
 				for _, r := range m.Records {
 					parallelRunGroup.Add(1)
-					logp.Info("Launching goroutine for s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
 					go logbeat.runVpcFlowLog(r, m, &parallelRunGroup)
-					logp.Info("Looping...")
 				}
 				parallelRunGroup.Wait()
 			case "guardduty":
