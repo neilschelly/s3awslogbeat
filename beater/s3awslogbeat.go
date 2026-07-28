@@ -289,6 +289,7 @@ func (logbeat *S3AwsLogBeat) Run(b *beat.Beat) error {
 }
 
 func (logbeat *S3AwsLogBeat) runQueue() error {
+	var parallelRunGroup sync.WaitGroup
 	for {
 		select {
 		case <-logbeat.done:
@@ -331,12 +332,13 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 					continue
 				}
 			case "vpcflowlog":
-				var vpcRunGroup sync.WaitGroup
 				for _, r := range m.Records {
-					vpcRunGroup.Add(1)
-					go logbeat.runVpcFlowLog(r, m, &vpcRunGroup)
+					parallelRunGroup.Add(1)
+					logp.Info("Launching goroutine for s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
+					go logbeat.runVpcFlowLog(r, m, &parallelRunGroup)
+					logp.Info("Looping...")
 				}
-				vpcRunGroup.Wait()
+				parallelRunGroup.Wait()
 			case "guardduty":
 				for _, r := range m.Records {
 					logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
@@ -373,9 +375,9 @@ func (logbeat *S3AwsLogBeat) runQueue() error {
 	return nil
 }
 
-func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject, m sqsNotificationMessage, vpcRunGroup *sync.WaitGroup) error {
+func (logbeat *S3AwsLogBeat) runVpcFlowLog(r messageObject, m sqsNotificationMessage, parallelRunGroup *sync.WaitGroup) error {
 	logp.Info("Downloading and processing log file: s3://%s/%s", r.S3.Bucket.Name, r.S3.Object.Key)
-	defer vpcRunGroup.Done()
+	defer parallelRunGroup.Done()
 	lf, err := logbeat.readVpcFlowLogfile(r)
 	if err != nil {
 		logbeat.filesProcessedErrors.WithLabelValues(r.S3.Bucket.Name).Inc()
@@ -460,6 +462,7 @@ func (logbeat *S3AwsLogBeat) fetchMessages() ([]sqsNotificationMessage, error) {
 	params := &sqs.ReceiveMessageInput{
 		QueueUrl:			aws.String(logbeat.sqsURL),
 		MaxNumberOfMessages: aws.Int64(int64(logbeat.numQueueFetch)),
+		VisibilityTimeout: aws.Int64(int64(300)),
 	}
 
 	resp, err := q.ReceiveMessage(params)
