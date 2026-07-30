@@ -450,6 +450,7 @@ func (logbeat *S3AwsLogBeat) fetchMessages() ([]sqsNotificationMessage, error) {
 	params := &sqs.ReceiveMessageInput{
 		QueueUrl:			aws.String(logbeat.sqsURL),
 		MaxNumberOfMessages: aws.Int64(int64(logbeat.numQueueFetch)),
+		VisibilityTimeout: aws.Int64(int64(300)),
 	}
 
 	resp, err := q.ReceiveMessage(params)
@@ -523,7 +524,6 @@ func (logbeat *S3AwsLogBeat) deleteMessage(m sqsNotificationMessage) error {
 	params := &sqs.DeleteMessageInput{
 		QueueUrl:	  aws.String(logbeat.sqsURL),
 		ReceiptHandle: aws.String(m.ReceiptHandle),
-		VisibilityTimeout: aws.Int64(int64(300)),
 	}
 
 	_, err := q.DeleteMessage(params)
