@@ -523,6 +523,7 @@ func (logbeat *S3AwsLogBeat) deleteMessage(m sqsNotificationMessage) error {
 	params := &sqs.DeleteMessageInput{
 		QueueUrl:	  aws.String(logbeat.sqsURL),
 		ReceiptHandle: aws.String(m.ReceiptHandle),
+		VisibilityTimeout: aws.Int64(int64(300)),
 	}
 
 	_, err := q.DeleteMessage(params)

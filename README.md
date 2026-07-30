@@ -9,8 +9,8 @@ This is a beat for the AWS services that can export logs to S3  S3AWSLogBeat rel
 Types of logs supported:
 * [Amazon Web Services (AWS) CloudTrail](https://aws.amazon.com/cloudtrail/)
 * [Amazon Web Services (AWS) VPC Flow Logs](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html)
-* GuardDuty (coming soon)
-* ECS Container Scanning (coming soon)
+* GuardDuty
+* ECS Container Scanning
 
 ## Getting Started
 ### Requirements
